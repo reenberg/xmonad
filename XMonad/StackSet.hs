@@ -58,6 +58,9 @@ import Data.List ( (\\) )
 import qualified Data.Map  as M (Map,insert,delete,empty)
 import Data.Function (on)
 
+import XMonad.Log
+
+
 -- $intro
 --
 -- The 'StackSet' data type encodes a window manager abstraction. The
@@ -181,7 +184,7 @@ data Stack a = Stack { focus  :: !a        -- focused thing in this set
 
 -- | this function indicates to catch that an error is expected
 abort :: String -> a
-abort x = error $ "xmonad: StackSet: " ++ x
+abort x = abortX' "StackSet" x
 
 -- ---------------------------------------------------------------------
 -- $construction

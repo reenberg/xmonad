@@ -4,10 +4,20 @@ module XMonad.Log
        , warningX
        , errorX
        , criticalX
-       , abortX)
+       , abortX
+       , abortX'
+       , setupLogger)
        where
 
-import System.Log.Logger (logM, Priority(..))
+import System.IO (stderr)
+import System.FilePath ((</>))
+
+import System.IO.Unsafe (unsafePerformIO) -- used when aborting
+
+import System.Log.Logger (Priority(..), logM, setHandlers, updateGlobalLogger, rootLoggerName)
+import System.Log.Handler (setFormatter)
+import System.Log.Handler.Simple (fileHandler, streamHandler)
+import System.Log.Formatter (simpleLogFormatter)
 
 import Control.Monad.State
 
@@ -32,3 +42,21 @@ abortX :: MonadIO m => String -> String -> m a
 abortX name msg =
   do criticalX name msg
      error $ "xmonad: " ++ name ++ ": " ++ msg
+
+-- | Abort execution outside MonadIO
+abortX' :: String -> String -> a
+abortX' name msg =
+  -- force execution of abortX
+  (unsafePerformIO $ abortX name msg) `seq` abortX' name msg
+
+
+-- | Setup a logger in $XMonad/xmonad.log and on stderr
+setupLogger :: MonadIO m => String -> m ()
+setupLogger dir = liftIO $
+  do fileH   <- fileHandler   (dir </> logFile) WARNING
+     streamH <- streamHandler stderr            WARNING
+     updateGlobalLogger rootLoggerName $ setHandlers $
+       map (flip setFormatter $ format) [streamH, fileH]
+  where
+    format  = simpleLogFormatter "$time, $loggername [$prio]: $msg"
+    logFile = "xmonad.log"
