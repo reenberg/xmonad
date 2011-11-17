@@ -310,7 +310,13 @@ instance LayoutClass Layout Window where
     handleMessage (Layout l) = fmap (fmap Layout) . handleMessage l
     description (Layout l)   = description l
 
-instance Show (Layout a) where show (Layout l) = show l
+
+-- | Dummy instance declaration. It ought newer to be used, as the above
+-- instance declaration of LayoutClass for Layout always peals the Layout
+-- construct away.
+instance Show a => Show (Layout a) where
+  show (Layout l) = "Layout (" ++ show l ++ ")"
+
 
 -- | Based on ideas in /An Extensible Dynamically-Typed Hierarchy of
 -- Exceptions/, Simon Marlow, 2006. Use extensible messages to the
