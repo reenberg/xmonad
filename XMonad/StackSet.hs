@@ -53,7 +53,7 @@ module XMonad.StackSet (
 
 import Prelude hiding (filter)
 import Data.Maybe   (listToMaybe,isJust,fromMaybe)
-import qualified Data.List as L (deleteBy,find,splitAt,filter,nub)
+import qualified Data.List as L (concat,deleteBy,find,splitAt,filter,nub)
 import Data.List ( (\\) )
 import qualified Data.Map  as M (Map,insert,delete,empty)
 
@@ -398,15 +398,44 @@ renameTag :: Eq i => i -> i -> StackSet i l a s sd -> StackSet i l a s sd
 renameTag o n = mapWorkspace rename
     where rename w = if tag w == o then w { tag = n } else w
 
--- | Ensure that a given set of workspace tags is present by renaming
--- existing workspaces and\/or creating new hidden workspaces as
--- necessary.
-ensureTags :: Eq i => l -> [i] -> StackSet i l a s sd -> StackSet i l a s sd
-ensureTags l allt st = et allt (map tag (workspaces st) \\ allt) st
-    where et [] _ s = s
-          et (i:is) rn s | i `tagMember` s = et is rn s
-          et (i:is) [] s = et is [] (s { hidden = Workspace i l Nothing : hidden s })
-          et (i:is) (r:rs) s = et is rs $ renameTag r i s
+
+-- | Remove a workspace by its tag. Requires a hidden workspace to take over focus when
+-- removing a workspace in focus.
+removeWorkspaceByTag :: (Eq t, Eq s) => t -> StackSet t l a s sd -> StackSet t l a s sd
+removeWorkspaceByTag t st
+  | currentTag st == t =
+    case hidden st of
+      (x:_) -> let st' = view (tag x) st in removeWorkspaceByTag t st'
+      _ -> st -- could not remove ws
+    -- TODO: Removing Xinerama workspace, what to choose for focus? (cloning/mirroring?)
+  | Just v <- L.find (\s -> t == (tag $ workspace s)) (visible st) =
+    case hidden st of
+      (x:_) -> st { visible = v {workspace=x} : visible st, hidden = removeWS $ hidden st }
+      _ -> st -- could not remove ws
+  | otherwise =
+      st { hidden = removeWS $ hidden st }
+  where
+    removeWS ws = L.filter (\w -> tag w /= t) ws
+
+
+-- | Ensure that a given set of workspace tags is present by creating new workspaces,
+-- moving windows and removing old workspaces where necessary.
+ensureTags :: (Eq t, Eq s, Ord a) => l -> [t] -> StackSet t l a s sd -> StackSet t l a s sd
+ensureTags _ [] st = st
+ensureTags l (news@(masterTag:_)) st = -- TODO: Pick clever masterTag or use ManageHook
+  foldl (flip removeWorkspaceByTag) movedWindows removes
+  where
+    olds     = map tag $ workspaces st
+
+    hiddens  = news \\ olds
+    removes  = olds \\ news
+
+    moves    = L.concat $ map (integrate'.stack) $
+               L.filter (\w -> not (tag w `elem` news)) $ workspaces st
+
+    addedHidden  = foldl (\s t -> s { hidden = Workspace t l Nothing : hidden s }) st hiddens
+    movedWindows = foldl (\s w -> shiftWin masterTag w s) addedHidden moves
+
 
 -- | Map a function on all the workspaces in the 'StackSet'.
 mapWorkspace :: (Workspace i l a -> Workspace i l a) -> StackSet i l a s sd -> StackSet i l a s sd
