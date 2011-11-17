@@ -56,6 +56,7 @@ import Data.Maybe   (listToMaybe,isJust,fromMaybe)
 import qualified Data.List as L (concat,deleteBy,find,splitAt,filter,nub)
 import Data.List ( (\\) )
 import qualified Data.Map  as M (Map,insert,delete,empty)
+import Data.Function (on)
 
 -- $intro
 --
@@ -194,7 +195,9 @@ abort x = error $ "xmonad: StackSet: " ++ x
 -- Xinerama: Virtual workspaces are assigned to physical screens, starting at 0.
 --
 new :: (Integral s) => l -> [i] -> [sd] -> StackSet i l a s sd
-new l wids m | not (null wids) && length m <= length wids && not (null m)
+new l wids m
+  | length m > 0
+  , not (null $ drop (length m - 1) wids) -- length m <= length wids
   = StackSet cur visi unseen M.empty
   where (seen,unseen) = L.splitAt (length m) $ map (\i -> Workspace i l Nothing) wids
         (cur:visi)    = [ Screen i s sd |  (i, s, sd) <- zip3 seen [0..] m ]
@@ -215,16 +218,14 @@ view i s
 
     | Just x <- L.find ((i==).tag.workspace) (visible s)
     -- if it is visible, it is just raised
-    = s { current = x, visible = current s : L.deleteBy (equating screen) x (visible s) }
+    = s { current = x, visible = current s : L.deleteBy ((==) `on` screen) x (visible s) }
 
     | Just x <- L.find ((i==).tag)           (hidden  s) -- must be hidden then
     -- if it was hidden, it is raised on the xine screen currently used
     = s { current = (current s) { workspace = x }
-        , hidden = workspace (current s) : L.deleteBy (equating tag) x (hidden s) }
+        , hidden = workspace (current s) : L.deleteBy ((==) `on` tag) x (hidden s) }
 
     | otherwise = s -- not a member of the stackset
-
-  where equating f = \x y -> f x == f y
 
     -- 'Catch'ing this might be hard. Relies on monotonically increasing
     -- workspace tags defined in 'new'
@@ -273,8 +274,10 @@ with dflt f = maybe dflt f . stack . workspace . current
 -- Apply a function, and a default value for 'Nothing', to modify the current stack.
 --
 modify :: Maybe (Stack a) -> (Stack a -> Maybe (Stack a)) -> StackSet i l a s sd -> StackSet i l a s sd
-modify d f s = s { current = (current s)
-                        { workspace = (workspace (current s)) { stack = with d f s }}}
+modify d f s = s { current =
+                        cs { workspace = (workspace cs) { stack = with d f s }}}
+  where
+    cs = current s
 
 -- |
 -- Apply a function to modify the current stack if it isn't empty, and we don't
@@ -461,7 +464,7 @@ member a s = isJust (findTag a s)
 findTag :: Eq a => a -> StackSet i l a s sd -> Maybe i
 findTag a s = listToMaybe
     [ tag w | w <- workspaces s, has a (stack w) ]
-    where has _ Nothing         = False
+    where has _ Nothing              = False
           has x (Just (Stack t l r)) = x `elem` (t : l ++ r)
 
 -- ---------------------------------------------------------------------

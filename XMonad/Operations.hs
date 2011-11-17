@@ -139,7 +139,7 @@ windows f = do
 
         let m   = W.floating ws
             flt = [(fw, scaleRationalRect viewrect r)
-                    | fw <- filter (flip M.member m) (W.index this)
+                    | fw <- filter (`M.member` m) (W.index this)
                     , Just r <- [M.lookup fw m]]
             vs = flt ++ rs
 
@@ -163,7 +163,7 @@ windows f = do
     -- all windows that are no longer in the windowset are marked as
     -- withdrawn, it is important to do this after the above, otherwise 'hide'
     -- will overwrite withdrawnState with iconicState
-    mapM_ (flip setWMState withdrawnState) (W.allWindows old \\ W.allWindows ws)
+    mapM_ (`setWMState` withdrawnState) (W.allWindows old \\ W.allWindows ws)
 
     isMouseFocused <- asks mouseFocused
     unless isMouseFocused $ clearEvents enterWindowMask
@@ -414,7 +414,7 @@ restart prog resume = do
         maybeShow (t, Right (PersistentExtension ext)) = Just (t, show ext)
         maybeShow (t, Left str) = Just (t, str)
         maybeShow _ = Nothing
-        extState = return . show . catMaybes . map maybeShow . M.toList . extensibleState
+        extState = return . show . mapMaybe maybeShow . M.toList . extensibleState
     args <- if resume then gets (\s -> "--resume":wsData s:extState s) else return []
     catchIO (executeFile prog True args Nothing)
 

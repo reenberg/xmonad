@@ -1,4 +1,9 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, PatternGuards, TypeSynonymInstances, DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances
+           , MultiParamTypeClasses
+           , TypeSynonymInstances
+           , DeriveDataTypeable
+           , ViewPatterns
+ #-}
 
 -- --------------------------------------------------------------------------
 -- |
@@ -95,9 +100,11 @@ tile f r nmaster n = if n <= nmaster || nmaster == 0
 --
 splitVertically, splitHorizontally :: Int -> Rectangle -> [Rectangle]
 splitVertically n r | n < 2 = [r]
-splitVertically n (Rectangle sx sy sw sh) = Rectangle sx sy sw smallh :
-    splitVertically (n-1) (Rectangle sx (sy+fromIntegral smallh) sw (sh-smallh))
-  where smallh = sh `div` fromIntegral n --hmm, this is a fold or map.
+splitVertically n (Rectangle sx sy sw sh) = first : rest
+  where
+    first  = Rectangle sx sy sw smallh
+    rest   = splitVertically (n - 1) $ Rectangle sx (sy + fromIntegral smallh) sw (sh - smallh)
+    smallh = sh `div` fromIntegral n --hmm, this is a fold or map.
 
 -- Not used in the core, but exported
 splitHorizontally n = map mirrorRect . splitVertically n . mirrorRect
@@ -107,7 +114,8 @@ splitHorizontallyBy, splitVerticallyBy :: RealFrac r => r -> Rectangle -> (Recta
 splitHorizontallyBy f (Rectangle sx sy sw sh) =
     ( Rectangle sx sy leftw sh
     , Rectangle (sx + fromIntegral leftw) sy (sw-fromIntegral leftw) sh)
-  where leftw = floor $ fromIntegral sw * f
+  where
+    leftw = floor $ fromIntegral sw * f
 
 -- Not used in the core, but exported
 splitVerticallyBy f = (mirrorRect *** mirrorRect) . splitHorizontallyBy f . mirrorRect
@@ -121,7 +129,7 @@ instance LayoutClass l a => LayoutClass (Mirror l) a where
     runLayout (W.Workspace i (Mirror l) ms) r = (map (second mirrorRect) *** fmap Mirror)
                                                 `fmap` runLayout (W.Workspace i l ms) (mirrorRect r)
     handleMessage (Mirror l) = fmap (fmap Mirror) . handleMessage l
-    description (Mirror l) = "Mirror "++ description l
+    description   (Mirror l) = "Mirror "++ description l
 
 -- | Mirror a rectangle.
 mirrorRect :: Rectangle -> Rectangle
@@ -146,6 +154,12 @@ data Choose l r a = Choose LR (l a) (r a) deriving (Read, Show)
 
 -- | Are we on the left or right sub-layout?
 data LR = L | R deriving (Read, Show, Eq)
+
+-- | Choose action depending on LR value
+(<>) :: a -> a -> LR -> a
+(l <> _) L = l
+(_ <> r) R = r
+
 
 data NextNoWrap = NextNoWrap deriving (Eq, Show, Typeable)
 instance Message NextNoWrap
@@ -177,34 +191,26 @@ instance (LayoutClass l a, LayoutClass r a) => LayoutClass (Choose l r) a where
     runLayout (W.Workspace i (Choose R l r) ms) =
         fmap (second . fmap $ Choose R l) . runLayout (W.Workspace i r ms)
 
-    description (Choose L l _) = description l
-    description (Choose R _ r) = description r
+    description (Choose lr l r) = (description l) <> (description r) $ lr
 
-    handleMessage lr m | Just NextLayout <- fromMessage m = do
+    handleMessage lr (fromMessage -> Just NextLayout) = do
         mlr' <- handle lr NextNoWrap
         maybe (handle lr FirstLayout) (return . Just) mlr'
 
-    handleMessage c@(Choose d l r) m | Just NextNoWrap <- fromMessage m =
-        case d of
-            L -> do
-                ml <- handle l NextNoWrap
-                case ml of
-                    Just _  -> choose c L ml Nothing
-                    Nothing -> choose c R Nothing =<< handle r FirstLayout
+    handleMessage c@(Choose d l r) (fromMessage -> Just NextNoWrap) =
+      (handle l NextNoWrap >>= maybe
+       (choose c R Nothing =<< handle r FirstLayout)
+       (\x -> choose c L (Just x) Nothing))
+      <>
+      (choose c R Nothing =<< handle r NextNoWrap) $ d
 
-            R -> choose c R Nothing =<< handle r NextNoWrap
-
-    handleMessage c@(Choose _ l _) m | Just FirstLayout <- fromMessage m =
+    handleMessage c@(Choose _ l _) (fromMessage -> Just FirstLayout) =
         flip (choose c L) Nothing =<< handle l FirstLayout
 
-    handleMessage c@(Choose d l r) m | Just ReleaseResources <- fromMessage m =
+    handleMessage c@(Choose d l r) (fromMessage -> Just ReleaseResources) =
         join $ liftM2 (choose c d) (handle l ReleaseResources) (handle r ReleaseResources)
 
     handleMessage c@(Choose d l r) m = do
-        ml' <- case d of
-                L -> handleMessage l m
-                R -> return Nothing
-        mr' <- case d of
-                L -> return Nothing
-                R -> handleMessage r m
+        ml' <- handleMessage l m <> return Nothing $ d
+        mr' <- return Nothing <> handleMessage r m $ d
         choose c d ml' mr'
