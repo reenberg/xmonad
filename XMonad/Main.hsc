@@ -15,7 +15,7 @@
 
 module XMonad.Main (xmonad) where
 
-import Control.Arrow (second)
+import Control.Arrow (second, (***))
 import Data.Bits
 import Data.List ((\\))
 import Data.Function
@@ -96,21 +96,20 @@ xmonad initxmc = do
     hSetBuffering stdout NoBuffering
 
     let layout = layoutHook xmc
-        lreads = readsLayout layout
         initialWinset = new layout (workspaces xmc) $ map SD xinesc
-        maybeRead reads' s = case reads' s of
-                                [(x, "")] -> Just x
-                                _         -> Nothing
 
-        winset = fromMaybe initialWinset $ do
-                    ("--resume" : s : _) <- return args
-                    ws                   <- maybeRead reads s
-                    return . W.ensureTags layout (workspaces xmc)
-                           $ W.mapLayout (fromMaybe layout . maybeRead lreads) ws
-        extState = fromMaybe M.empty $ do
-                     ("--resume" : _ : dyns : _) <- return args
-                     vals                        <- maybeRead reads dyns
-                     return . M.fromList . map (second Left) $ vals
+        -- replace the unit layouts with the layouts that are defined in the
+        -- current config, and update the tags/workspaces according to the
+        -- current config.
+        fixWS = W.ensureTags layout (workspaces xmc) .
+                W.mapLayout (\_ -> layout)
+
+    resume <- case args of -- IO
+      ("--resume" : file : _) -> readState file
+      _ -> return Nothing
+
+    let (winset, extState) =
+          maybe (initialWinset, M.empty) (fixWS *** id) resume
 
         cf = XConf
             { display       = dpy
@@ -131,6 +130,7 @@ xmonad initxmc = do
             , dragging        = Nothing
             , extensibleState = extState
             }
+
     allocaXEvent $ \e ->
         runX cf st $ do
 
