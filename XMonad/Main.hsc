@@ -34,11 +34,12 @@ import System.Environment (getArgs)
 import Graphics.X11.Xlib hiding (refreshKeyboardMapping)
 import Graphics.X11.Xlib.Extras
 
+import XMonad.Log
 import XMonad.Core
-import qualified XMonad.Config as Default
-import XMonad.StackSet (new, floating, member)
+import qualified XMonad.Config   as Default
 import qualified XMonad.StackSet as W
 import XMonad.Operations
+import XMonad.StackSet (new, floating, member)
 
 import System.IO
 
@@ -57,6 +58,9 @@ foreign import ccall unsafe "locale.h setlocale"
 --
 xmonad :: (LayoutClass l Window, Read (l Window)) => XConfig l -> IO ()
 xmonad initxmc = do
+    -- setup logging
+    getXMonadDir >>= setupLogger
+
     -- setup locale information from environment
     withCString "" $ c_setlocale (#const LC_ALL)
     -- ignore SIGPIPE and SIGCHLD
