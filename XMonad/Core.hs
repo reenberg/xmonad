@@ -1,6 +1,8 @@
 {-# LANGUAGE ExistentialQuantification, FlexibleInstances, GeneralizedNewtypeDeriving,
              MultiParamTypeClasses, TypeSynonymInstances, CPP, DeriveDataTypeable #-}
 
+{-# LANGUAGE FlexibleContexts, UndecidableInstances #-}
+
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  XMonad.Core
@@ -20,12 +22,12 @@ module XMonad.Core (
     X, WindowSet, WindowSpace, WorkspaceId,
     ScreenId(..), ScreenDetail(..), XState(..),
     XConf(..), XConfig(..), LayoutClass(..),
-    Layout(..), readsLayout, Typeable, Message,
-    SomeMessage(..), fromMessage, LayoutMessages(..),
-    StateExtension(..), ExtensionClass(..),
+    Layout(..), Typeable, Message, SomeMessage(..), LayoutMessages(..),
+    StateExtension(..), ExtensionClass(..), fromMessage,
     runX, catchX, userCode, userCodeDef, io, catchIO, installSignalHandlers, uninstallSignalHandlers,
     withDisplay, withWindowSet, isRoot, runOnWorkspaces,
-    getAtom, spawn, spawnPID, xfork, getXMonadDir, recompile, trace, whenJust, whenX,
+    getAtom, spawn, spawnPID, xfork, getXMonadDir, writeState, readState,
+    recompile, trace, whenJust, whenX,
     atom_WM_STATE, atom_WM_PROTOCOLS, atom_WM_DELETE_WINDOW, ManageHook, Query(..), runQuery
   ) where
 
@@ -33,7 +35,7 @@ import XMonad.Log
 import XMonad.StackSet hiding (modify)
 
 import Prelude hiding ( catch )
-import Control.Exception.Extensible (catch, fromException, try, bracket, throw, finally, SomeException(..))
+import Control.Exception.Extensible (catch, fromException, try, bracket, throw, finally, SomeException(..), IOException)
 import Control.Applicative
 import Control.Monad.State
 import Control.Monad.Reader
@@ -56,6 +58,7 @@ import Data.Monoid
 
 import qualified Data.Map as M
 import qualified Data.Set as S
+import qualified Data.List as L
 
 -- | XState, the (mutable) window manager state.
 data XState = XState
@@ -216,11 +219,6 @@ atom_WM_STATE           = getAtom "WM_STATE"
 --   and 'LayoutClass'.
 data Layout a = forall l. (LayoutClass l a, Read (l a)) => Layout (l a)
 
--- | Using the 'Layout' as a witness, parse existentially wrapped windows
--- from a 'String'.
-readsLayout :: Layout a -> String -> [(Layout a, String)]
-readsLayout (Layout l) s = [(Layout (asTypeOf x l), rs) | (x, rs) <- reads s]
-
 -- | Every layout must be an instance of 'LayoutClass', which defines
 -- the basic layout operations along with a sensible default for each.
 --
@@ -313,7 +311,13 @@ instance LayoutClass Layout Window where
     handleMessage (Layout l) = fmap (fmap Layout) . handleMessage l
     description (Layout l)   = description l
 
-instance Show (Layout a) where show (Layout l) = show l
+
+-- | Dummy instance declaration. It ought newer to be used, as the above
+-- instance declaration of LayoutClass for Layout always peals the Layout
+-- construct away.
+instance Show a => Show (Layout a) where
+  show (Layout l) = "Layout (" ++ show l ++ ")"
+
 
 -- | Based on ideas in /An Extensible Dynamically-Typed Hierarchy of
 -- Exceptions/, Simon Marlow, 2006. Use extensible messages to the
@@ -419,6 +423,52 @@ runOnWorkspaces job = do
 -- | Return the path to @~\/.xmonad@.
 getXMonadDir :: MonadIO m => m String
 getXMonadDir = io $ getAppUserDataDirectory "xmonad"
+
+
+-- | Write the WindowSet state and the ExtensibleState to a file, such that it
+-- may later be read again by another process. IO errors are handled, and it
+-- returns True if a successful state file is written and False otherwise.
+writeState :: FilePath -> X Bool
+writeState file =
+  writeState' `catchX` return False
+  where
+    writeState' = do
+      s <- get
+      let exts = M.foldlWithKey fixExtState M.empty . extensibleState
+          ws = mapLayout (\_ -> ()) . windowset
+          -- TODO: This should be done with some binary serialisation instead!
+          st = show $ (ws s, exts s)
+      io $ withFile file WriteMode (\h -> hPutStr h st)
+      return True
+    -- Convert the Right PersistentExtension into Left str, they are converted
+    -- back by the get function in the XMonad.Util.ExtensibleState module.
+    fixExtState m t (Right (PersistentExtension ext)) = M.insert t (show ext) m
+    fixExtState m t (Left str) = M.insert t str m
+    fixExtState m _ _ = m
+
+-- FIXME: The ought to be a better way of doing this. Maybe using `asTypeOf` the right places.
+type WindowSetUnitLayout = StackSet String () Window ScreenId ScreenDetail
+type ExtSet = M.Map String (Either String StateExtension)
+
+-- | Read the WindowSet and ExtensibleState of a previous XMonad process from
+-- the given file. It returns Nothing if either an IO error is encountered or if
+-- it couldn't parse the file.
+readState :: (Read WindowSetUnitLayout) => FilePath -> IO (Maybe (WindowSetUnitLayout, ExtSet))
+readState file =
+  readState' `catch`
+  (\e -> do
+    trace $ "readState: Error when reading state file: '" ++ file ++
+      "' with exception: " ++ show (e :: IOException)
+    return Nothing)
+  where
+    readState' = do
+      st <- withFile file ReadMode (\h -> hGetLine h)
+      case reads st of
+        [((ws, exts), "")] -> return $ Just (ws, M.map Left exts)
+        _         -> do
+          trace $ "readState: Could not parse state file: '" ++ file ++ "'"
+          return Nothing
+
 
 -- | 'recompile force', recompile @~\/.xmonad\/xmonad.hs@ when any of the
 -- following apply:

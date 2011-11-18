@@ -34,6 +34,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 import qualified Control.Exception.Extensible as C
 
+import System.FilePath
 import System.Posix.Process (executeFile)
 import Graphics.X11.Xlib
 import Graphics.X11.Xinerama (getScreenInfo)
@@ -408,15 +409,22 @@ initColor dpy c = C.handle (\(C.SomeException _) -> return Nothing) $
 -- When executing another window manager, @resume@ should be 'False'.
 restart :: String -> Bool -> X ()
 restart prog resume = do
+    -- TODO: If execution of the file fails or writing of the state fails, then
+    -- it might not be a good idea to release the resources?
     broadcastMessage ReleaseResources
     io . flush =<< asks display
-    let wsData = show . W.mapLayout show . windowset
-        maybeShow (t, Right (PersistentExtension ext)) = Just (t, show ext)
-        maybeShow (t, Left str) = Just (t, str)
-        maybeShow _ = Nothing
-        extState = return . show . mapMaybe maybeShow . M.toList . extensibleState
-    args <- if resume then gets (\s -> "--resume":wsData s:extState s) else return []
-    catchIO (executeFile prog True args Nothing)
+    args <- if resume
+            then do
+              -- Only generate the state file if we are asked to do so.
+              path <- getXMonadDir
+              let stateFile = path </> "xmonad.state"
+              -- TODO: Handle non successful writeState
+              suc <- writeState stateFile
+              return ["--resume", stateFile]
+              else return []
+    -- Replace the currently running process with the new WM.
+    catchIO $ executeFile prog True args Nothing
+
 
 ------------------------------------------------------------------------
 -- | Floating layer support
