@@ -29,10 +29,11 @@ logX prio name msg =
 
 
 -- | Logging with various importance
-infoX, debugX, warningX, errorX, criticalX :: MonadIO m => String -> String -> m ()
+debugX, infoX, warningX, errorX, criticalX :: MonadIO m => String -> String -> m ()
 
-infoX = logX INFO
+-- This is the ordering of importance, with CRITICAL being the most important.
 debugX = logX DEBUG
+infoX = logX INFO
 warningX = logX WARNING
 errorX = logX ERROR
 criticalX = logX CRITICAL
@@ -53,7 +54,7 @@ abortX' name msg =
 -- | Setup a logger in $XMonad/xmonad.log and on stderr
 setupLogger :: MonadIO m => String -> m ()
 setupLogger dir = liftIO $
-  do fileH   <- fileHandler   (dir </> logFile) WARNING
+  do fileH   <- fileHandler   (dir </> logFile) WARNING -- TODO:  This should be defined by the user config, and not harcoded
      streamH <- streamHandler stderr            WARNING
      updateGlobalLogger rootLoggerName $ setHandlers $
        map (flip setFormatter $ format) [streamH, fileH]
