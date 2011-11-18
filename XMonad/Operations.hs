@@ -419,7 +419,7 @@ restart prog resume = do
               path <- getXMonadDir
               let stateFile = path </> "xmonad.state"
               -- TODO: Handle non successful writeState
-              suc <- writeState stateFile
+              _ <- writeState stateFile
               return ["--resume", stateFile]
               else return []
     -- Replace the currently running process with the new WM.

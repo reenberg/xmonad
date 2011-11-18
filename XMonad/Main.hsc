@@ -15,7 +15,7 @@
 
 module XMonad.Main (xmonad) where
 
-import Control.Arrow (second, (***))
+import Control.Arrow ((***))
 import Data.Bits
 import Data.List ((\\))
 import Data.Function
