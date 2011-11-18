@@ -140,7 +140,7 @@ windows f = do
 
         let m   = W.floating ws
             flt = [(fw, scaleRationalRect viewrect r)
-                    | fw <- filter (flip M.member m) (W.index this)
+                    | fw <- filter (`M.member` m) (W.index this)
                     , Just r <- [M.lookup fw m]]
             vs = flt ++ rs
 
@@ -164,7 +164,7 @@ windows f = do
     -- all windows that are no longer in the windowset are marked as
     -- withdrawn, it is important to do this after the above, otherwise 'hide'
     -- will overwrite withdrawnState with iconicState
-    mapM_ (flip setWMState withdrawnState) (W.allWindows old \\ W.allWindows ws)
+    mapM_ (`setWMState` withdrawnState) (W.allWindows old \\ W.allWindows ws)
 
     isMouseFocused <- asks mouseFocused
     unless isMouseFocused $ clearEvents enterWindowMask
@@ -424,6 +424,7 @@ restart prog resume = do
               else return []
     -- Replace the currently running process with the new WM.
     catchIO $ executeFile prog True args Nothing
+
 
 ------------------------------------------------------------------------
 -- | Floating layer support

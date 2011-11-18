@@ -31,6 +31,7 @@ module XMonad.Core (
     atom_WM_STATE, atom_WM_PROTOCOLS, atom_WM_DELETE_WINDOW, ManageHook, Query(..), runQuery
   ) where
 
+import XMonad.Log
 import XMonad.StackSet hiding (modify)
 
 import Prelude hiding ( catch )
@@ -168,9 +169,11 @@ catchX :: X a -> X a -> X a
 catchX job errcase = do
     st <- get
     c <- ask
-    (a, s') <- io $ runX c st job `catch` \e -> case fromException e of
-                        Just x -> throw e `const` (x `asTypeOf` ExitSuccess)
-                        _ -> do hPrint stderr e; runX c st errcase
+    (a, s') <- io $ runX c st job `catch`
+               \e -> case fromException e of
+                 Just x -> throw e `const` (x `asTypeOf` ExitSuccess)
+                 _      -> do errorX "catchX" $ show e
+                              runX c st errcase
     put s'
     return a
 
@@ -384,7 +387,7 @@ io = liftIO
 -- | Lift an 'IO' action into the 'X' monad.  If the action results in an 'IO'
 -- exception, log the exception to stderr and continue normal execution.
 catchIO :: MonadIO m => IO () -> m ()
-catchIO f = io (f `catch` \(SomeException e) -> hPrint stderr e >> hFlush stderr)
+catchIO f = io (f `catch` \(SomeException e) -> errorX "catchIO" $ show e)
 
 -- | spawn. Launch an external application. Specifically, it double-forks and
 -- runs the 'String' you pass as a command to \/bin\/sh.
@@ -518,7 +521,7 @@ recompile force = io $ do
                     ++ ["","Please check the file for errors."]
             -- nb, the ordering of printing, then forking, is crucial due to
             -- lazy evaluation
-            hPutStrLn stderr msg
+            errorX "recompile" msg
             forkProcess $ executeFile "xmessage" True ["-default", "okay", msg] Nothing
             return ()
         return (status == ExitSuccess)
@@ -542,7 +545,7 @@ whenX a f = a >>= \b -> when b f
 -- | A 'trace' for the 'X' monad. Logs a string to stderr. The result may
 -- be found in your .xsession-errors file
 trace :: MonadIO m => String -> m ()
-trace = io . hPutStrLn stderr
+trace = debugX "trace"
 
 -- | Ignore SIGPIPE to avoid termination when a pipe is full, and SIGCHLD to
 -- avoid zombie processes, and clean up any extant zombie processes.

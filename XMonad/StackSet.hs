@@ -53,9 +53,13 @@ module XMonad.StackSet (
 
 import Prelude hiding (filter)
 import Data.Maybe   (listToMaybe,isJust,fromMaybe)
-import qualified Data.List as L (deleteBy,find,splitAt,filter,nub)
+import qualified Data.List as L (concat,deleteBy,find,splitAt,filter,nub)
 import Data.List ( (\\) )
 import qualified Data.Map  as M (Map,insert,delete,empty)
+import Data.Function (on)
+
+import XMonad.Log
+
 
 -- $intro
 --
@@ -180,7 +184,7 @@ data Stack a = Stack { focus  :: !a        -- focused thing in this set
 
 -- | this function indicates to catch that an error is expected
 abort :: String -> a
-abort x = error $ "xmonad: StackSet: " ++ x
+abort x = abortX' "StackSet" x
 
 -- ---------------------------------------------------------------------
 -- $construction
@@ -194,7 +198,9 @@ abort x = error $ "xmonad: StackSet: " ++ x
 -- Xinerama: Virtual workspaces are assigned to physical screens, starting at 0.
 --
 new :: (Integral s) => l -> [i] -> [sd] -> StackSet i l a s sd
-new l wids m | not (null wids) && length m <= length wids && not (null m)
+new l wids m
+  | length m > 0
+  , not (null $ drop (length m - 1) wids) -- length m <= length wids
   = StackSet cur visi unseen M.empty
   where (seen,unseen) = L.splitAt (length m) $ map (\i -> Workspace i l Nothing) wids
         (cur:visi)    = [ Screen i s sd |  (i, s, sd) <- zip3 seen [0..] m ]
@@ -215,16 +221,14 @@ view i s
 
     | Just x <- L.find ((i==).tag.workspace) (visible s)
     -- if it is visible, it is just raised
-    = s { current = x, visible = current s : L.deleteBy (equating screen) x (visible s) }
+    = s { current = x, visible = current s : L.deleteBy ((==) `on` screen) x (visible s) }
 
     | Just x <- L.find ((i==).tag)           (hidden  s) -- must be hidden then
     -- if it was hidden, it is raised on the xine screen currently used
     = s { current = (current s) { workspace = x }
-        , hidden = workspace (current s) : L.deleteBy (equating tag) x (hidden s) }
+        , hidden = workspace (current s) : L.deleteBy ((==) `on` tag) x (hidden s) }
 
     | otherwise = s -- not a member of the stackset
-
-  where equating f = \x y -> f x == f y
 
     -- 'Catch'ing this might be hard. Relies on monotonically increasing
     -- workspace tags defined in 'new'
@@ -273,8 +277,10 @@ with dflt f = maybe dflt f . stack . workspace . current
 -- Apply a function, and a default value for 'Nothing', to modify the current stack.
 --
 modify :: Maybe (Stack a) -> (Stack a -> Maybe (Stack a)) -> StackSet i l a s sd -> StackSet i l a s sd
-modify d f s = s { current = (current s)
-                        { workspace = (workspace (current s)) { stack = with d f s }}}
+modify d f s = s { current =
+                        cs { workspace = (workspace cs) { stack = with d f s }}}
+  where
+    cs = current s
 
 -- |
 -- Apply a function to modify the current stack if it isn't empty, and we don't
@@ -398,15 +404,44 @@ renameTag :: Eq i => i -> i -> StackSet i l a s sd -> StackSet i l a s sd
 renameTag o n = mapWorkspace rename
     where rename w = if tag w == o then w { tag = n } else w
 
--- | Ensure that a given set of workspace tags is present by renaming
--- existing workspaces and\/or creating new hidden workspaces as
--- necessary.
-ensureTags :: Eq i => l -> [i] -> StackSet i l a s sd -> StackSet i l a s sd
-ensureTags l allt st = et allt (map tag (workspaces st) \\ allt) st
-    where et [] _ s = s
-          et (i:is) rn s | i `tagMember` s = et is rn s
-          et (i:is) [] s = et is [] (s { hidden = Workspace i l Nothing : hidden s })
-          et (i:is) (r:rs) s = et is rs $ renameTag r i s
+
+-- | Remove a workspace by its tag. Requires a hidden workspace to take over focus when
+-- removing a workspace in focus.
+removeWorkspaceByTag :: (Eq t, Eq s) => t -> StackSet t l a s sd -> StackSet t l a s sd
+removeWorkspaceByTag t st
+  | currentTag st == t =
+    case hidden st of
+      (x:_) -> let st' = view (tag x) st in removeWorkspaceByTag t st'
+      _ -> st -- could not remove ws
+    -- TODO: Removing Xinerama workspace, what to choose for focus? (cloning/mirroring?)
+  | Just v <- L.find (\s -> t == (tag $ workspace s)) (visible st) =
+    case hidden st of
+      (x:_) -> st { visible = v {workspace=x} : visible st, hidden = removeWS $ hidden st }
+      _ -> st -- could not remove ws
+  | otherwise =
+      st { hidden = removeWS $ hidden st }
+  where
+    removeWS ws = L.filter (\w -> tag w /= t) ws
+
+
+-- | Ensure that a given set of workspace tags is present by creating new workspaces,
+-- moving windows and removing old workspaces where necessary.
+ensureTags :: (Eq t, Eq s, Ord a) => l -> [t] -> StackSet t l a s sd -> StackSet t l a s sd
+ensureTags _ [] st = st
+ensureTags l (news@(masterTag:_)) st = -- TODO: Pick clever masterTag or use ManageHook
+  foldl (flip removeWorkspaceByTag) movedWindows removes
+  where
+    olds     = map tag $ workspaces st
+
+    hiddens  = news \\ olds
+    removes  = olds \\ news
+
+    moves    = L.concat $ map (integrate'.stack) $
+               L.filter (\w -> not (tag w `elem` news)) $ workspaces st
+
+    addedHidden  = foldl (\s t -> s { hidden = Workspace t l Nothing : hidden s }) st hiddens
+    movedWindows = foldl (\s w -> shiftWin masterTag w s) addedHidden moves
+
 
 -- | Map a function on all the workspaces in the 'StackSet'.
 mapWorkspace :: (Workspace i l a -> Workspace i l a) -> StackSet i l a s sd -> StackSet i l a s sd
@@ -432,7 +467,7 @@ member a s = isJust (findTag a s)
 findTag :: Eq a => a -> StackSet i l a s sd -> Maybe i
 findTag a s = listToMaybe
     [ tag w | w <- workspaces s, has a (stack w) ]
-    where has _ Nothing         = False
+    where has _ Nothing              = False
           has x (Just (Stack t l r)) = x `elem` (t : l ++ r)
 
 -- ---------------------------------------------------------------------
