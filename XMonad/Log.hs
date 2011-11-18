@@ -1,12 +1,24 @@
 module XMonad.Log
-       ( infoX
+       ( -- * XMonad Logging feature
+         -- $LOG
+
+         -- ** Setting up the logger
+         setupLogger
+
+         -- ** Working with the logger
+       ,  infoX
        , debugX
+       , noticeX
        , warningX
        , errorX
        , criticalX
+       , alertX
+       , emergencyX
+
+       -- ** Abort with error logging.
        , abortX
        , abortX'
-       , setupLogger)
+       )
        where
 
 import System.IO (stderr)
@@ -22,36 +34,23 @@ import System.Log.Formatter (simpleLogFormatter)
 import Control.Monad.State
 
 
--- | Main log function
-logX :: MonadIO m => Priority -> String -> String -> m ()
-logX prio name msg =
-  liftIO $ logM name prio msg
+-- $LOG
+
+-- Logging support for XMonad, that will log to 'stderr' and a file. Everything
+-- that is written to 'stderr' is placed in @~/.xsession-errors@, however this
+-- might not be optimal, as on some systems quite a few applications tend to be
+-- chatty and thus the XMonad specific messages may be hard to find. To solve
+-- this, everything is also written into an XMonad specific log such that it is
+-- easy to locate.
+--
+-- The level of "chattyness" can be controlled by setting the 'Priority' in the
+-- XMonad configuration. Setting the priority to 'WARNING' will show any
+-- messages with that priority and above.
+-- TODO: Fix this documentation.
+-- * Add example of setting up default config for different logging levels.
 
 
--- | Logging with various importance
-debugX, infoX, warningX, errorX, criticalX :: MonadIO m => String -> String -> m ()
-
--- This is the ordering of importance, with CRITICAL being the most important.
-debugX = logX DEBUG
-infoX = logX INFO
-warningX = logX WARNING
-errorX = logX ERROR
-criticalX = logX CRITICAL
-
--- | Abort execution, yielding a critical log entry and an error
-abortX :: MonadIO m => String -> String -> m a
-abortX name msg =
-  do criticalX name msg
-     error $ "xmonad: " ++ name ++ ": " ++ msg
-
--- | Abort execution outside MonadIO
-abortX' :: String -> String -> a
-abortX' name msg =
-  -- force execution of abortX
-  (unsafePerformIO $ abortX name msg) `seq` abortX' name msg
-
-
--- | Setup a logger in $XMonad/xmonad.log and on stderr
+-- | Setup a logger in @dir@/xmonad.log and on stderr.
 setupLogger :: MonadIO m => String -> m ()
 setupLogger dir = liftIO $
   do fileH   <- fileHandler   (dir </> logFile) WARNING -- TODO:  This should be defined by the user config, and not harcoded
@@ -61,3 +60,33 @@ setupLogger dir = liftIO $
   where
     format  = simpleLogFormatter "$time, $loggername [$prio]: $msg"
     logFile = "xmonad.log"
+
+
+-- | Main log function used by the specialised loggers below.
+logX :: MonadIO m => Priority -> String -> String -> m ()
+logX prio name msg =
+  liftIO $ logM name prio msg
+
+-- | Logging with various importance. Importance goes from DEBUG through
+-- EMERGENCY, with EMERGENCY being the most important.
+debugX, infoX, noticeX, warningX, errorX, criticalX, alertX, emergencyX :: MonadIO m => String -> String -> m ()
+debugX     = logX DEBUG     -- Debug messages
+infoX      = logX INFO      -- Information
+noticeX    = logX NOTICE    -- Normal runtime conditions
+warningX   = logX WARNING   -- General Warnings
+errorX     = logX ERROR     -- General Errors
+criticalX  = logX CRITICAL  -- Severe situations
+alertX     = logX ALERT     -- Take immediate action
+emergencyX = logX EMERGENCY -- System is unusable
+
+-- | Abort execution, yielding a critical log entry and an error.
+abortX :: MonadIO m => String -> String -> m a
+abortX name msg =
+  do criticalX name msg
+     error $ "xmonad: " ++ name ++ ": " ++ msg
+
+-- | Abort execution outside MonadIO.
+abortX' :: String -> String -> a
+abortX' name msg =
+  -- force execution of abortX
+  id $! unsafePerformIO $ abortX name msg
