@@ -18,6 +18,7 @@
 module XMonad.Operations where
 
 import XMonad.Core
+import XMonad.Log
 import XMonad.Layout (Full(..))
 import qualified XMonad.StackSet as W
 
@@ -409,6 +410,7 @@ initColor dpy c = C.handle (\(C.SomeException _) -> return Nothing) $
 -- When executing another window manager, @resume@ should be 'False'.
 restart :: String -> Bool -> X ()
 restart prog resume = do
+    noticeX "XMonad.Operations.restart" ("(Re)starting '" ++ show prog ++ "' with resume: " ++ show resume)
     -- TODO: If execution of the file fails or writing of the state fails, then
     -- it might not be a good idea to release the resources?
     broadcastMessage ReleaseResources
@@ -422,6 +424,7 @@ restart prog resume = do
               _ <- writeState stateFile
               return ["--resume", stateFile]
               else return []
+    noticeX "XMonad.Operations.restart" ("Executing '" ++ show prog ++ "'")
     -- Replace the currently running process with the new WM.
     catchIO $ executeFile prog True args Nothing
 

@@ -49,12 +49,14 @@ import System.Posix.Types (ProcessID)
 import System.Process
 import System.Directory
 import System.Exit
+import System.Log.Logger (Priority())
 import Graphics.X11.Xlib
 import Graphics.X11.Xlib.Extras (Event)
 import Data.Typeable
 import Data.List ((\\))
 import Data.Maybe (isJust,fromMaybe)
 import Data.Monoid
+
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -110,6 +112,7 @@ data XConfig l = XConfig
     , logHook            :: !(X ())              -- ^ The action to perform when the windows set is changed
     , startupHook        :: !(X ())              -- ^ The action to perform on startup
     , focusFollowsMouse  :: !Bool                -- ^ Whether window entry events can change focus
+    , logFilePriority    :: !Priority            -- ^ The lowest priority of logging to output to /xmonad.log/
     }
 
 
@@ -428,7 +431,8 @@ getXMonadDir = io $ getAppUserDataDirectory "xmonad"
 -- may later be read again by another process. IO errors are handled, and it
 -- returns True if a successful state file is written and False otherwise.
 writeState :: FilePath -> X Bool
-writeState file =
+writeState file = do
+  noticeX "XMonad.Core.writeState" ("Writing XMonad state file" ++ (show file))
   writeState' `catchX` return False
   where
     writeState' = do
@@ -453,10 +457,10 @@ type ExtSet = M.Map String (Either String StateExtension)
 -- the given file. It returns Nothing if either an IO error is encountered or if
 -- it couldn't parse the file.
 readState :: (Read WindowSetUnitLayout) => FilePath -> IO (Maybe (WindowSetUnitLayout, ExtSet))
-readState file =
-  readState' `catch`
-  (\e -> do
-    trace $ "readState: Error when reading state file: '" ++ file ++
+readState file = do
+  noticeX "XMonad.Core.readState" ("Reading XMonad state file: " ++ show file)
+  readState' `catch` (\e -> do
+    noticeX "XMonad.Core.readState" $ "Error when reading state file: '" ++ file ++
       "' with exception: " ++ show (e :: IOException)
     return Nothing)
   where
@@ -464,8 +468,8 @@ readState file =
       st <- withFile file ReadMode (\h -> hGetLine h)
       case reads st of
         [((ws, exts), "")] -> return $ Just (ws, M.map Left exts)
-        _         -> do
-          trace $ "readState: Could not parse state file: '" ++ file ++ "'"
+        _  -> do
+          noticeX "XMonad.Core.readState" $ "Could not parse state file: '" ++ file ++ "'"
           return Nothing
 
 
@@ -502,6 +506,7 @@ recompile force = io $ do
     binT <- getModTime bin
     if force || any (binT <) (srcT : libTs)
       then do
+        noticeX "XMonad.Core.recompile" "Recompiling users 'xmonad.hs'"
         -- temporarily disable SIGCHLD ignoring:
         uninstallSignalHandlers
         status <- bracket (openFile err WriteMode) hClose $ \h ->
@@ -520,7 +525,7 @@ recompile force = io $ do
                     ++ ["","Please check the file for errors."]
             -- nb, the ordering of printing, then forking, is crucial due to
             -- lazy evaluation
-            errorX "recompile" msg
+            errorX "XMonad.Core.recompile" msg
             forkProcess $ executeFile "xmessage" True ["-default", "okay", msg] Nothing
             return ()
         return (status == ExitSuccess)
@@ -541,8 +546,10 @@ whenJust mg f = maybe (return ()) f mg
 whenX :: X Bool -> X () -> X ()
 whenX a f = a >>= \b -> when b f
 
+
 -- | A 'trace' for the 'X' monad. Logs a string to stderr. The result may
 -- be found in your .xsession-errors file
+-- TODO: Remove this, as the new logging now does this.
 trace :: MonadIO m => String -> m ()
 trace = debugX "trace"
 
@@ -550,6 +557,7 @@ trace = debugX "trace"
 -- avoid zombie processes, and clean up any extant zombie processes.
 installSignalHandlers :: MonadIO m => m ()
 installSignalHandlers = io $ do
+    noticeX "XMonad.Core.installSignalhandler" "Installed signal handlers, to ignore SIGPIPE and SIGCHLD"
     installHandler openEndedPipe Ignore Nothing
     installHandler sigCHLD Ignore Nothing
     (try :: IO a -> IO (Either SomeException a))
@@ -560,6 +568,7 @@ installSignalHandlers = io $ do
 
 uninstallSignalHandlers :: MonadIO m => m ()
 uninstallSignalHandlers = io $ do
+    noticeX "XMonad.Core.uninstallSignalhandler" "Un-installed signal handlers"
     installHandler openEndedPipe Default Nothing
     installHandler sigCHLD Default Nothing
     return ()

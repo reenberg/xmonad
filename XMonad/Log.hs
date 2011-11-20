@@ -6,8 +6,8 @@ module XMonad.Log
          setupLogger
 
          -- ** Working with the logger
-       ,  infoX
        , debugX
+       , infoX
        , noticeX
        , warningX
        , errorX
@@ -26,7 +26,7 @@ import System.FilePath ((</>))
 
 import System.IO.Unsafe (unsafePerformIO) -- used when aborting
 
-import System.Log.Logger (Priority(..), logM, setHandlers, updateGlobalLogger, rootLoggerName)
+import System.Log.Logger (Priority(..), logM, setHandlers, updateGlobalLogger, rootLoggerName, setLevel)
 import System.Log.Handler (setFormatter)
 import System.Log.Handler.Simple (fileHandler, streamHandler)
 import System.Log.Formatter (simpleLogFormatter)
@@ -50,13 +50,16 @@ import Control.Monad.State
 -- * Add example of setting up default config for different logging levels.
 
 
--- | Setup a logger in @dir@/xmonad.log and on stderr.
-setupLogger :: MonadIO m => String -> m ()
-setupLogger dir = liftIO $
-  do fileH   <- fileHandler   (dir </> logFile) WARNING -- TODO:  This should be defined by the user config, and not harcoded
-     streamH <- streamHandler stderr            WARNING
-     updateGlobalLogger rootLoggerName $ setHandlers $
-       map (flip setFormatter $ format) [streamH, fileH]
+-- | Setup a logger in @dir@/xmonad.log and on stderr. 'WARNING's and above will
+-- be written to 'stderr', but only @lowestPriority@ will be written to the
+-- log file.
+setupLogger :: MonadIO m => Priority -> FilePath -> m ()
+setupLogger lowestPriority dir = liftIO $
+  do fileH   <- fileHandler (dir </> logFile) lowestPriority
+     streamH <- streamHandler stderr          WARNING
+     updateGlobalLogger rootLoggerName $
+       setLevel DEBUG . -- We use individual priorities above.
+       setHandlers (map (flip setFormatter $ format) [streamH, fileH])
   where
     format  = simpleLogFormatter "$time, $loggername [$prio]: $msg"
     logFile = "xmonad.log"

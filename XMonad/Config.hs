@@ -27,11 +27,11 @@ module XMonad.Config (defaultConfig) where
 import XMonad.Core as XMonad hiding
     (workspaces,manageHook,keys,logHook,startupHook,borderWidth,mouseBindings
     ,layoutHook,modMask,terminal,normalBorderColor,focusedBorderColor,focusFollowsMouse
-    ,handleEventHook)
+    ,handleEventHook, logFilePriority)
 import qualified XMonad.Core as XMonad
     (workspaces,manageHook,keys,logHook,startupHook,borderWidth,mouseBindings
     ,layoutHook,modMask,terminal,normalBorderColor,focusedBorderColor,focusFollowsMouse
-    ,handleEventHook)
+    ,handleEventHook, logFilePriority)
 
 import XMonad.Layout
 import XMonad.Operations
@@ -40,6 +40,7 @@ import qualified XMonad.StackSet as W
 import Data.Bits ((.|.))
 import Data.Monoid
 import qualified Data.Map as M
+import System.Log.Logger (Priority(..))
 import System.Exit
 import Graphics.X11.Xlib
 import Graphics.X11.Xlib.Extras
@@ -157,6 +158,10 @@ terminal = "xterm"
 focusFollowsMouse :: Bool
 focusFollowsMouse = True
 
+-- | The lowest priority to write in the log file.
+logFilePriority :: Priority
+logFilePriority = WARNING
+
 -- | The xmonad key bindings. Add, modify or remove key bindings here.
 --
 -- (The comment formatting character is used when generating the manpage)
@@ -248,4 +253,5 @@ defaultConfig = XConfig
     , XMonad.manageHook         = manageHook
     , XMonad.handleEventHook    = handleEventHook
     , XMonad.focusFollowsMouse  = focusFollowsMouse
+    , XMonad.logFilePriority    = logFilePriority
     }

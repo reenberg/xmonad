@@ -59,22 +59,29 @@ foreign import ccall unsafe "locale.h setlocale"
 xmonad :: (LayoutClass l Window, Read (l Window)) => XConfig l -> IO ()
 xmonad initxmc = do
     -- setup logging
-    getXMonadDir >>= setupLogger
+    setupLogger (logFilePriority initxmc) =<< getXMonadDir
+    noticeX "XMonad.Main.xmonad" "Starting XMonad"
 
     -- setup locale information from environment
     withCString "" $ c_setlocale (#const LC_ALL)
+
     -- ignore SIGPIPE and SIGCHLD
     installSignalHandlers
+
     -- First, wrap the layout in an existential, to keep things pretty:
     let xmc = initxmc { layoutHook = Layout $ layoutHook initxmc }
+
     dpy   <- openDisplay ""
+
     let dflt = defaultScreen dpy
 
     rootw  <- rootWindow dpy dflt
 
     args <- getArgs
 
-    when ("--replace" `elem` args) $ replace dpy dflt rootw
+    when ("--replace" `elem` args) $ do
+      noticeX "XMonad.Main.xmonad" "Got '--replace' as argument"
+      replace dpy dflt rootw
 
     -- If another WM is running, a BadAccess error will be returned.  The
     -- default error handler will write the exception to stderr and exit with
@@ -82,6 +89,8 @@ xmonad initxmc = do
     selectInput dpy rootw $  substructureRedirectMask .|. substructureNotifyMask
                          .|. enterWindowMask .|. leaveWindowMask .|. structureNotifyMask
                          .|. buttonPressMask
+
+    -- This is where BadAccess is returned when WM is already running.
     sync dpy False -- sync to ensure all outstanding errors are delivered
 
     -- turn off the default handler in favor of one that ignores all errors
