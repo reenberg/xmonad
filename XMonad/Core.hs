@@ -35,6 +35,7 @@ import XMonad.Log
 import XMonad.StackSet hiding (modify)
 
 import Prelude hiding ( catch )
+import Codec.Binary.UTF8.String (encodeString)
 import Control.Exception.Extensible (catch, fromException, try, bracket, throw, finally, SomeException(..), IOException)
 import Control.Applicative
 import Control.Monad.State
@@ -393,12 +394,14 @@ catchIO f = io (f `catch` \(SomeException e) -> errorX "catchIO" $ show e)
 
 -- | spawn. Launch an external application. Specifically, it double-forks and
 -- runs the 'String' you pass as a command to \/bin\/sh.
+--
+-- Note this function assumes your locale uses utf8.
 spawn :: MonadIO m => String -> m ()
 spawn x = spawnPID x >> return ()
 
 -- | Like 'spawn', but returns the 'ProcessID' of the launched application
 spawnPID :: MonadIO m => String -> m ProcessID
-spawnPID x = xfork $ executeFile "/bin/sh" False ["-c", x] Nothing
+spawnPID x = xfork $ executeFile "/bin/sh" False ["-c", encodeString x] Nothing
 
 -- | A replacement for 'forkProcess' which resets default signal handlers.
 xfork :: MonadIO m => IO () -> m ProcessID
