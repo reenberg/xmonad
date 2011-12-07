@@ -25,8 +25,9 @@ build-type:         Simple
 
 data-files:         man/xmonad.hs
 
-flag small_base
+flag splitBase
     description: Choose the new smaller, split-up base package.
+    default: True
 
 flag testing
     description: Testing mode, only build minimal components
@@ -43,7 +44,7 @@ library
                         XMonad.Operations
                         XMonad.StackSet
 
-    if flag(small_base)
+    if flag(splitBase)
         build-depends: base < 5 && >=3, containers, directory, process, filepath,
                        extensible-exceptions, hslogger > 1.0
     else
@@ -89,6 +90,6 @@ executable xmonad
         hs-source-dirs: . tests/
         build-depends:  QuickCheck < 2
         ghc-options:    -Werror
-    if flag(testing) && flag(small_base)
+    if flag(testing) && flag(splitBase)
         build-depends:  filepath, process, directory, mtl, unix, X11, base, containers, random,
                         extensible-exceptions, hslogger > 1.0
