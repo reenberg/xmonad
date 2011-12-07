@@ -1,5 +1,5 @@
 {-# OPTIONS -fglasgow-exts -w #-}
-module Properties where
+module Main where
 
 import XMonad.StackSet hiding (filter)
 import XMonad.Layout
@@ -17,6 +17,7 @@ import Control.Exception    (assert)
 import qualified Control.Exception.Extensible as C
 import Control.Monad
 import Test.QuickCheck hiding (promote)
+import Test.QuickCheck.All
 import System.IO.Unsafe
 import System.IO
 import System.Random hiding (next)
@@ -42,12 +43,12 @@ import qualified Data.Map as M
 instance (Integral i, Integral s, Eq a, Arbitrary a, Arbitrary l, Arbitrary sd)
         => Arbitrary (StackSet i l a s sd) where
     arbitrary = do
-        sz <- choose (1,10)     -- number of workspaces
-        n  <- choose (0,sz-1)   -- pick one to be in focus
+        sz  <- choose (1,10)     -- number of workspaces
+        n   <- choose (0,sz-1)   -- pick one to be in focus
         sc  <- choose (1,sz)     -- a number of physical screens
         lay <- arbitrary           -- pick any layout
         sds <- replicateM sc arbitrary
-        ls <- vector sz         -- a vector of sz workspaces
+        ls  <- vector sz         -- a vector of sz workspaces
 
         -- pick a random item in each stack to focus
         fs <- sequence [ if null s then return Nothing
@@ -134,7 +135,7 @@ monotonic (x:y:zs) | x == y-1  = monotonic (y:zs)
 prop_invariant = invariant
 
 -- and check other ops preserve invariants
-prop_empty_I  (n :: Positive Int) l = forAll (choose (1,fromIntegral n)) $  \m ->
+prop_empty_I  (SizedPositive n) l = forAll (choose (1, fromIntegral n)) $  \m ->
                                       forAll (vector m) $ \ms ->
         invariant $ new l [0..fromIntegral n-1] ms
 
@@ -852,316 +853,134 @@ prop_resize_max_extra ((NonNegative inc_w))  b@(w,h) =
 
 main :: IO ()
 main = do
-    args <- fmap (drop 1) getArgs
-    let n = if null args then 100 else read (head args)
-    (results, passed) <- liftM unzip $ mapM (\(s,a) -> printf "%-40s: " s >> a n) tests
-    printf "Passed %d tests!\n" (sum passed)
-    when (not . and $ results) $ fail "Not all tests passed!"
+  arg <- getArgs
+  let n = if null arg then 100 else read $ head arg
+      args = stdArgs { maxSuccess = n, maxSize = 10 }
+      qc   = quickCheckWithResult args
+      perform (s, t) = printf "%-35s: " s >> qc t
+  mapM_ perform tests
  where
-
     tests =
-        [("StackSet invariants" , mytest prop_invariant)
+        [("StackSet invariants" , property prop_invariant)
+        ,("empty: invariant"    , property prop_empty_I)
+        ,("empty is empty"      ,  property prop_empty)
+        ,("empty / current"     ,  property prop_empty_current)
+        ,("empty / member"      ,  property prop_member_empty)
 
-        ,("empty: invariant"    , mytest prop_empty_I)
-        ,("empty is empty"      , mytest prop_empty)
-        ,("empty / current"     , mytest prop_empty_current)
-        ,("empty / member"      , mytest prop_member_empty)
+        ,("view : invariant"    ,  property prop_view_I)
+        ,("view sets current"   ,  property prop_view_current)
+        ,("view idempotent"     ,  property prop_view_idem)
+        ,("view reversible"    ,  property prop_view_reversible)
+--      ,("view / xinerama"     ,  property prop_view_xinerama)
+        ,("view is local"       ,  property prop_view_local)
 
-        ,("view : invariant"    , mytest prop_view_I)
-        ,("view sets current"   , mytest prop_view_current)
-        ,("view idempotent"     , mytest prop_view_idem)
-        ,("view reversible"    , mytest prop_view_reversible)
---      ,("view / xinerama"     , mytest prop_view_xinerama)
-        ,("view is local"       , mytest prop_view_local)
-
-        ,("greedyView : invariant"    , mytest prop_greedyView_I)
-        ,("greedyView sets current"   , mytest prop_greedyView_current)
-        ,("greedyView is safe "   ,   mytest prop_greedyView_current_id)
-        ,("greedyView idempotent"     , mytest prop_greedyView_idem)
-        ,("greedyView reversible"     , mytest prop_greedyView_reversible)
-        ,("greedyView is local"       , mytest prop_greedyView_local)
+        ,("greedyView : invariant"    ,  property prop_greedyView_I)
+        ,("greedyView sets current"   ,  property prop_greedyView_current)
+        ,("greedyView is safe "   ,    property prop_greedyView_current_id)
+        ,("greedyView idempotent"     ,  property prop_greedyView_idem)
+        ,("greedyView reversible"     ,  property prop_greedyView_reversible)
+        ,("greedyView is local"       ,  property prop_greedyView_local)
 --
---      ,("valid workspace xinerama", mytest prop_lookupWorkspace)
+--      ,("valid workspace xinerama",  property prop_lookupWorkspace)
 
-        ,("peek/member "        , mytest prop_member_peek)
+        ,("peek/member "        ,  property prop_member_peek)
 
-        ,("index/length"        , mytest prop_index_length)
+        ,("index/length"        ,  property prop_index_length)
 
-        ,("focus left : invariant", mytest prop_focusUp_I)
-        ,("focus master : invariant", mytest prop_focusMaster_I)
-        ,("focus right: invariant", mytest prop_focusDown_I)
-        ,("focusWindow: invariant", mytest prop_focus_I)
-        ,("focus left/master"   , mytest prop_focus_left_master)
-        ,("focus right/master"  , mytest prop_focus_right_master)
-        ,("focus master/master"  , mytest prop_focus_master_master)
-        ,("focusWindow master"  , mytest prop_focusWindow_master)
-        ,("focus left/right"    , mytest prop_focus_left)
-        ,("focus right/left"    , mytest prop_focus_right)
-        ,("focus all left  "    , mytest prop_focus_all_l)
-        ,("focus all right "    , mytest prop_focus_all_r)
-        ,("focus down is local"      , mytest prop_focus_down_local)
-        ,("focus up is local"      , mytest prop_focus_up_local)
-        ,("focus master is local"      , mytest prop_focus_master_local)
-        ,("focus master idemp"  , mytest prop_focusMaster_idem)
+        ,("focus left : invariant",  property prop_focusUp_I)
+        ,("focus master : invariant",  property prop_focusMaster_I)
+        ,("focus right: invariant",  property prop_focusDown_I)
+        ,("focusWindow: invariant",  property prop_focus_I)
+        ,("focus left/master"   ,  property prop_focus_left_master)
+        ,("focus right/master"  ,  property prop_focus_right_master)
+        ,("focus master/master"  ,  property prop_focus_master_master)
+        ,("focusWindow master"  ,  property prop_focusWindow_master)
+        ,("focus left/right"    ,  property prop_focus_left)
+        ,("focus right/left"    ,  property prop_focus_right)
+        ,("focus all left  "    ,  property prop_focus_all_l)
+        ,("focus all right "    ,  property prop_focus_all_r)
+        ,("focus down is local"      ,  property prop_focus_down_local)
+        ,("focus up is local"      ,  property prop_focus_up_local)
+        ,("focus master is local"      ,  property prop_focus_master_local)
+        ,("focus master idemp"  ,  property prop_focusMaster_idem)
 
-        ,("focusWindow is local", mytest prop_focusWindow_local)
-        ,("focusWindow works"   , mytest prop_focusWindow_works)
-        ,("focusWindow identity", mytest prop_focusWindow_identity)
+        ,("focusWindow is local",  property prop_focusWindow_local)
+        ,("focusWindow works"   ,  property prop_focusWindow_works)
+        ,("focusWindow identity",  property prop_focusWindow_identity)
 
-        ,("findTag"           , mytest prop_findIndex)
-        ,("allWindows/member"   , mytest prop_allWindowsMember)
-        ,("currentTag"          , mytest prop_currentTag)
+        ,("findTag"           ,  property prop_findIndex)
+        ,("allWindows/member"   ,  property prop_allWindowsMember)
+        ,("currentTag"          ,  property prop_currentTag)
 
-        ,("insert: invariant"   , mytest prop_insertUp_I)
-        ,("insert/new"          , mytest prop_insert_empty)
-        ,("insert is idempotent", mytest prop_insert_idem)
-        ,("insert is reversible", mytest prop_insert_delete)
-        ,("insert is local"     , mytest prop_insert_local)
-        ,("insert duplicates"   , mytest prop_insert_duplicate)
-        ,("insert/peek "        , mytest prop_insert_peek)
-        ,("insert/size"         , mytest prop_size_insert)
+        ,("insert: invariant"   ,  property prop_insertUp_I)
+        ,("insert/new"          ,  property prop_insert_empty)
+        ,("insert is idempotent",  property prop_insert_idem)
+        ,("insert is reversible",  property prop_insert_delete)
+        ,("insert is local"     ,  property prop_insert_local)
+        ,("insert duplicates"   ,  property prop_insert_duplicate)
+        ,("insert/peek "        ,  property prop_insert_peek)
+        ,("insert/size"         ,  property prop_size_insert)
 
-        ,("delete: invariant"   , mytest prop_delete_I)
-        ,("delete/empty"        , mytest prop_empty)
-        ,("delete/member"       , mytest prop_delete)
-        ,("delete is reversible", mytest prop_delete_insert)
-        ,("delete is local"     , mytest prop_delete_local)
-        ,("delete/focus"        , mytest prop_delete_focus)
-        ,("delete  last/focus up", mytest prop_delete_focus_end)
-        ,("delete ~last/focus down", mytest prop_delete_focus_not_end)
+        ,("delete: invariant"   ,  property prop_delete_I)
+        ,("delete/empty"        ,  property prop_empty)
+        ,("delete/member"       ,  property prop_delete)
+        ,("delete is reversible",  property prop_delete_insert)
+        ,("delete is local"     ,  property prop_delete_local)
+        ,("delete/focus"        ,  property prop_delete_focus)
+        ,("delete  last/focus up",  property prop_delete_focus_end)
+        ,("delete ~last/focus down",  property prop_delete_focus_not_end)
 
-        ,("filter preserves order", mytest prop_filter_order)
+        ,("filter preserves order",  property prop_filter_order)
 
-        ,("swapMaster: invariant", mytest prop_swap_master_I)
-        ,("swapUp: invariant" , mytest prop_swap_left_I)
-        ,("swapDown: invariant", mytest prop_swap_right_I)
-        ,("swapMaster id on focus", mytest prop_swap_master_focus)
-        ,("swapUp id on focus", mytest prop_swap_left_focus)
-        ,("swapDown id on focus", mytest prop_swap_right_focus)
-        ,("swapMaster is idempotent", mytest prop_swap_master_idempotent)
-        ,("swap all left  "     , mytest prop_swap_all_l)
-        ,("swap all right "     , mytest prop_swap_all_r)
-        ,("swapMaster is local" , mytest prop_swap_master_local)
-        ,("swapUp is local"   , mytest prop_swap_left_local)
-        ,("swapDown is local"  , mytest prop_swap_right_local)
+        ,("swapMaster: invariant",  property prop_swap_master_I)
+        ,("swapUp: invariant" ,  property prop_swap_left_I)
+        ,("swapDown: invariant",  property prop_swap_right_I)
+        ,("swapMaster id on focus",  property prop_swap_master_focus)
+        ,("swapUp id on focus",  property prop_swap_left_focus)
+        ,("swapDown id on focus",  property prop_swap_right_focus)
+        ,("swapMaster is idempotent",  property prop_swap_master_idempotent)
+        ,("swap all left  "     ,  property prop_swap_all_l)
+        ,("swap all right "     ,  property prop_swap_all_r)
+        ,("swapMaster is local" ,  property prop_swap_master_local)
+        ,("swapUp is local"   ,  property prop_swap_left_local)
+        ,("swapDown is local"  ,  property prop_swap_right_local)
 
-        ,("shiftMaster id on focus", mytest prop_shift_master_focus)
-        ,("shiftMaster is local", mytest prop_shift_master_local)
-        ,("shiftMaster is idempotent", mytest prop_shift_master_idempotent)
-        ,("shiftMaster preserves ordering", mytest prop_shift_master_ordering)
+        ,("shiftMaster id on focus",  property prop_shift_master_focus)
+        ,("shiftMaster is local",  property prop_shift_master_local)
+        ,("shiftMaster is idempotent",  property prop_shift_master_idempotent)
+        ,("shiftMaster preserves ordering",  property prop_shift_master_ordering)
 
-        ,("shift: invariant"    , mytest prop_shift_I)
-        ,("shift is reversible" , mytest prop_shift_reversible)
-        ,("shiftWin: invariant" , mytest prop_shift_win_I)
-        ,("shiftWin is shift on focus" , mytest prop_shift_win_focus)
-        ,("shiftWin fix current" , mytest prop_shift_win_fix_current)
+        ,("shift: invariant"    ,  property prop_shift_I)
+        ,("shift is reversible" ,  property prop_shift_reversible)
+        ,("shiftWin: invariant" ,  property prop_shift_win_I)
+        ,("shiftWin is shift on focus" ,  property prop_shift_win_focus)
+        ,("shiftWin fix current" ,  property prop_shift_win_fix_current)
 
-        ,("floating is reversible" , mytest prop_float_reversible)
-        ,("floating sets geometry" , mytest prop_float_geometry)
-        ,("floats can be deleted", mytest prop_float_delete)
-        ,("screens includes current", mytest prop_screens)
+        ,("floating is reversible" ,  property prop_float_reversible)
+        ,("floating sets geometry" ,  property prop_float_geometry)
+        ,("floats can be deleted",  property prop_float_delete)
+        ,("screens includes current",  property prop_screens)
 
-        ,("differentiate works", mytest prop_differentiate)
-        ,("lookupTagOnScreen", mytest prop_lookup_current)
-        ,("lookupTagOnVisbleScreen", mytest prop_lookup_visible)
-        ,("screens works",      mytest prop_screens_works)
-        ,("renaming works",     mytest prop_rename1)
-        ,("ensure works",     mytest prop_ensure)
-        ,("ensure hidden semantics",     mytest prop_ensure_append)
+        ,("differentiate works",  property prop_differentiate)
+        ,("lookupTagOnScreen",  property prop_lookup_current)
+        ,("lookupTagOnVisbleScreen",  property prop_lookup_visible)
+        ,("screens works",       property prop_screens_works)
+        ,("renaming works",      property prop_rename1)
+        ,("ensure works",      property prop_ensure)
+        ,("ensure hidden semantics",      property prop_ensure_append)
 
-        ,("mapWorkspace id", mytest prop_mapWorkspaceId)
-        ,("mapWorkspace inverse", mytest prop_mapWorkspaceInverse)
-        ,("mapLayout id", mytest prop_mapLayoutId)
-        ,("mapLayout inverse", mytest prop_mapLayoutInverse)
-
-        -- testing for failure:
-        ,("abort fails",            mytest prop_abort)
-        ,("new fails with abort",   mytest prop_new_abort)
-        ,("shiftWin identity",      mytest prop_shift_win_indentity)
-
-        -- tall layout
-
-        ,("tile 1 window fullsize", mytest prop_tile_fullscreen)
-        ,("tiles never overlap",    mytest prop_tile_non_overlap)
-        ,("split hozizontally",     mytest prop_split_hoziontal)
-        ,("split verticalBy",       mytest prop_splitVertically)
-
-        ,("pure layout tall",       mytest prop_purelayout_tall)
-        ,("send shrink    tall",    mytest prop_shrink_tall)
-        ,("send expand    tall",    mytest prop_expand_tall)
-        ,("send incmaster tall",    mytest prop_incmaster_tall)
-
-        -- full layout
-
-        ,("pure layout full",       mytest prop_purelayout_full)
-        ,("send message full",      mytest prop_sendmsg_full)
-        ,("describe full",          mytest prop_desc_full)
-
-        ,("describe mirror",        mytest prop_desc_mirror)
-
-        -- resize hints
-        ,("window hints: inc",      mytest prop_resize_inc)
-        ,("window hints: inc all",  mytest prop_resize_inc_extra)
-        ,("window hints: max",      mytest prop_resize_max)
-        ,("window hints: max all ", mytest prop_resize_max_extra)
-
+        ,("mapWorkspace id",  property prop_mapWorkspaceId)
+        ,("mapWorkspace inverse",  property prop_mapWorkspaceInverse)
         ]
 
-------------------------------------------------------------------------
---
--- QC driver
---
 
-debug = False
-
-mytest :: Testable a => a -> Int -> IO (Bool, Int)
-mytest a n = mycheck defaultConfig
-    { configMaxTest=n
-    , configEvery   = \n args -> let s = show n in s ++ [ '\b' | _ <- s ] } a
- -- , configEvery= \n args -> if debug then show n ++ ":\n" ++ unlines args else [] } a
-
-mycheck :: Testable a => Config -> a -> IO (Bool, Int)
-mycheck config a = do
-    rnd <- newStdGen
-    mytests config (evaluate a) rnd 0 0 []
-
-mytests :: Config -> Gen Result -> StdGen -> Int -> Int -> [[String]] -> IO (Bool, Int)
-mytests config gen rnd0 ntest nfail stamps
-    | ntest == configMaxTest config = done "OK," ntest stamps >> return (True, ntest)
-    | nfail == configMaxFail config = done "Arguments exhausted after" ntest stamps >> return (True, ntest)
-    | otherwise               =
-      do putStr (configEvery config ntest (arguments result)) >> hFlush stdout
-         case ok result of
-           Nothing    ->
-             mytests config gen rnd1 ntest (nfail+1) stamps
-           Just True  ->
-             mytests config gen rnd1 (ntest+1) nfail (stamp result:stamps)
-           Just False ->
-             putStr ( "Falsifiable after "
-                   ++ show ntest
-                   ++ " tests:\n"
-                   ++ unlines (arguments result)
-                    ) >> hFlush stdout >> return (False, ntest)
-     where
-      result      = generate (configSize config ntest) rnd2 gen
-      (rnd1,rnd2) = split rnd0
-
-done :: String -> Int -> [[String]] -> IO ()
-done mesg ntest stamps = putStr ( mesg ++ " " ++ show ntest ++ " tests" ++ table )
-  where
-    table = display
-            . map entry
-            . reverse
-            . sort
-            . map pairLength
-            . group
-            . sort
-            . filter (not . null)
-            $ stamps
-
-    display []  = ".\n"
-    display [x] = " (" ++ x ++ ").\n"
-    display xs  = ".\n" ++ unlines (map (++ ".") xs)
-
-    pairLength xss@(xs:_) = (length xss, xs)
-    entry (n, xs)         = percentage n ntest
-                       ++ " "
-                       ++ concat (intersperse ", " xs)
-
-    percentage n m        = show ((100 * n) `div` m) ++ "%"
-
-------------------------------------------------------------------------
-
-instance Arbitrary Char where
-    arbitrary = choose ('a','z')
-    coarbitrary n = coarbitrary (ord n)
-
-instance Random Word8 where
-  randomR = integralRandomR
-  random = randomR (minBound,maxBound)
-
-instance Arbitrary Word8 where
-  arbitrary     = choose (minBound,maxBound)
-  coarbitrary n = variant (fromIntegral ((fromIntegral n) `rem` 4))
-
-instance Random Word64 where
-  randomR = integralRandomR
-  random = randomR (minBound,maxBound)
-
-instance Arbitrary Word64 where
-  arbitrary     = choose (minBound,maxBound)
-  coarbitrary n = variant (fromIntegral ((fromIntegral n) `rem` 4))
-
-integralRandomR :: (Integral a, RandomGen g) => (a,a) -> g -> (a,g)
-integralRandomR  (a,b) g = case randomR (fromIntegral a :: Integer,
-                                         fromIntegral b :: Integer) g of
-                            (x,g) -> (fromIntegral x, g)
-
-instance Arbitrary Position  where
-    arbitrary = do n <- arbitrary :: Gen Word8
-                   return (fromIntegral n)
-    coarbitrary = undefined
-
-instance Arbitrary Dimension where
-    arbitrary = do n <- arbitrary :: Gen Word8
-                   return (fromIntegral n)
-    coarbitrary = undefined
-
-instance Arbitrary Rectangle where
-    arbitrary = do
-        sx <- arbitrary
-        sy <- arbitrary
-        sw <- arbitrary
-        sh <- arbitrary
-        return $ Rectangle sx sy sw sh
-    coarbitrary = undefined
-
-instance Arbitrary Rational where
-    arbitrary = do
-        n <- arbitrary
-        d' <- arbitrary
-        let d =  if d' == 0 then 1 else d'
-        return (n % d)
-    coarbitrary = undefined
-
-------------------------------------------------------------------------
--- QC 2
-
--- from QC2
--- | NonEmpty xs: guarantees that xs is non-empty.
-newtype NonEmptyList a = NonEmpty [a]
- deriving ( Eq, Ord, Show, Read )
-
-instance Arbitrary a => Arbitrary (NonEmptyList a) where
-  arbitrary   = NonEmpty `fmap` (arbitrary `suchThat` (not . null))
-  coarbitrary = undefined
-
+{-| Instances -}
 newtype NonEmptyNubList a = NonEmptyNubList [a]
  deriving ( Eq, Ord, Show, Read )
 
 instance (Eq a, Arbitrary a) => Arbitrary (NonEmptyNubList a) where
   arbitrary   = NonEmptyNubList `fmap` ((liftM nub arbitrary) `suchThat` (not . null))
-  coarbitrary = undefined
 
-type Positive a = NonZero (NonNegative a)
-
-newtype NonZero a = NonZero a
- deriving ( Eq, Ord, Num, Integral, Real, Enum, Show, Read )
-
-instance (Num a, Ord a, Arbitrary a) => Arbitrary (NonZero a) where
-  arbitrary = fmap NonZero $ arbitrary `suchThat` (/= 0)
-  coarbitrary = undefined
-
-newtype NonNegative a = NonNegative a
- deriving ( Eq, Ord, Num, Integral, Real, Enum, Show, Read )
-
-instance (Num a, Ord a, Arbitrary a) => Arbitrary (NonNegative a) where
-  arbitrary =
-    frequency
-      [ (5, (NonNegative . abs) `fmap` arbitrary)
-      , (1, return 0)
-      ]
-  coarbitrary = undefined
 
 newtype EmptyStackSet = EmptyStackSet T deriving Show
 
@@ -1172,20 +991,12 @@ instance Arbitrary EmptyStackSet where
         l <- arbitrary
         -- there cannot be more screens than workspaces:
         return . EmptyStackSet . new l ns $ take (min (length ns) (length sds)) sds
-    coarbitrary = error "coarbitrary EmptyStackSet"
 
--- | Generates a value that satisfies a predicate.
-suchThat :: Gen a -> (a -> Bool) -> Gen a
-gen `suchThat` p =
-  do mx <- gen `suchThatMaybe` p
-     case mx of
-       Just x  -> return x
-       Nothing -> sized (\n -> resize (n+1) (gen `suchThat` p))
 
--- | Tries to generate a value that satisfies a predicate.
-suchThatMaybe :: Gen a -> (a -> Bool) -> Gen (Maybe a)
-gen `suchThatMaybe` p = sized (try 0 . max 1)
- where
-  try _ 0 = return Nothing
-  try k n = do x <- resize (2*k+n) gen
-               if p x then return (Just x) else try (k+1) (n-1)
+data SizedPositive = SizedPositive Int
+                     deriving Show
+
+
+instance Arbitrary SizedPositive where
+  arbitrary = sized $ \s -> do x <- choose (1, max 1 s)
+                               return $ SizedPositive x
