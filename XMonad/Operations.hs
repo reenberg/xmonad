@@ -25,7 +25,7 @@ import qualified XMonad.StackSet as W
 import Data.Maybe
 import Data.Monoid          (Endo(..))
 import Data.List            (nub, (\\), find)
-import Data.Bits            ((.|.), (.&.), complement)
+import Data.Bits            ((.|.), (.&.), complement, testBit)
 import Data.Ratio
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -327,7 +327,29 @@ setFocusX w = withWindowSet $ \ws -> do
 
     -- If we ungrab buttons on the root window, we lose our mouse bindings.
     whenX (not <$> isRoot w) $ setButtonGrab False w
-    io $ setInputFocus dpy w revertToPointerRoot 0
+
+    hints <- io $ getWMHints dpy w
+    protocols <- io $ getWMProtocols dpy w
+    wmprot <- atom_WM_PROTOCOLS
+    wmtf <- atom_WM_TAKE_FOCUS
+    currevt <- asks currentEvent
+
+    let inputHintSet = wmh_flags hints `testBit` inputHintBit
+    when ((inputHintSet && wmh_input hints) || (not inputHintSet)) $
+      io $ do setInputFocus dpy w revertToPointerRoot 0
+
+    when (wmtf `elem` protocols) $
+      io $ allocaXEvent $ \ev -> do
+        setEventType ev clientMessage
+        setClientMessageEvent ev w wmprot 32 wmtf $
+          maybe currentTime event_time currevt
+        sendEvent dpy w False noEventMask ev
+        where
+          event_time ev | ev_event_type ev `elem` timedEvents = ev_time ev
+          event_time _                                        = currentTime
+
+          timedEvents = [ keyPress, keyRelease, buttonPress, buttonRelease
+                        , enterNotify, leaveNotify, selectionRequest ]
 
 ------------------------------------------------------------------------
 -- Message handling
