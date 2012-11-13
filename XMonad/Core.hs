@@ -28,7 +28,8 @@ module XMonad.Core (
     withDisplay, withWindowSet, isRoot, runOnWorkspaces,
     getAtom, spawn, spawnPID, xfork, getXMonadDir, writeState, readState,
     recompile, trace, whenJust, whenX,
-    atom_WM_STATE, atom_WM_PROTOCOLS, atom_WM_DELETE_WINDOW, ManageHook, Query(..), runQuery
+    atom_WM_STATE, atom_WM_PROTOCOLS, atom_WM_DELETE_WINDOW, atom_WM_TAKE_FOCUS,
+    ManageHook, Query(..), runQuery
   ) where
 
 import XMonad.Log
@@ -90,7 +91,8 @@ data XConf = XConf
     , mouseFocused :: !Bool           -- ^ was refocus caused by mouse action?
     , mousePosition :: !(Maybe (Position, Position))
                                       -- ^ position of the mouse according to
-                                      -- the event currently being processed
+    , currentEvent :: !(Maybe Event)
+                                      -- ^ the event currently being processed
     }
 
 -- todo, better name
@@ -214,6 +216,7 @@ atom_WM_PROTOCOLS, atom_WM_DELETE_WINDOW, atom_WM_STATE :: X Atom
 atom_WM_PROTOCOLS       = getAtom "WM_PROTOCOLS"
 atom_WM_DELETE_WINDOW   = getAtom "WM_DELETE_WINDOW"
 atom_WM_STATE           = getAtom "WM_STATE"
+atom_WM_TAKE_FOCUS      = getAtom "WM_TAKE_FOCUS"
 
 ------------------------------------------------------------------------
 -- LayoutClass handling. See particular instances in Operations.hs

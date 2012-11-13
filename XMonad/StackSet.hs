@@ -433,11 +433,11 @@ ensureTags l (news@(masterTag:_)) st = -- TODO: Pick clever masterTag or use Man
   where
     olds     = map tag $ workspaces st
 
-    hiddens  = news \\ olds
-    removes  = olds \\ news
+    hiddens  = news \\ olds -- Newly introduced workspaces
+    removes  = olds \\ news -- Deprecated workspaces
 
     moves    = L.concat $ map (integrate'.stack) $
-               L.filter (\w -> not (tag w `elem` news)) $ workspaces st
+               L.filter (\w -> tag w `elem` removes) $ workspaces st
 
     addedHidden  = foldl (\s t -> s { hidden = Workspace t l Nothing : hidden s }) st hiddens
     movedWindows = foldl (\s w -> shiftWin masterTag w s) addedHidden moves
