@@ -1,0 +1,20 @@
+* Configure xmonad with the testing flag:
+
+  $ cabal configure -ftesting
+
+* (re)Compile/install xmonad
+
+  $ cabal build
+  
+  or 
+
+  $ cabal install
+
+* Run the tests. If installed, just run xmonad with the test argument:
+
+  $ xmonad --run-tests
+
+  If not installed, the run xmonad from the dist/build folder:
+
+  ./dist/build/xmonad/xmonad --run-tests
+

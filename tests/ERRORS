@@ -1,0 +1,69 @@
+insert is reversible               : (3 tests)
+^C*** Failed! Exception: 'user interrupt' (after 4 tests):
+'k'
+StackSet {current = Screen {workspace = Workspace {tag = 9, layout = 0, stack =
+Just (Stack {focus = '\FS', up = "", down = ""})}, screen = 1, screenDetail =
+-2}, visible = [Screen {workspace = Workspace {tag = 3, layout = 0, stack = Just
+(Stack {focus = '<', up = "", down = ""})}, screen = 2, screenDetail = 2},Screen
+{workspace = Workspace {tag = 4, layout = 0, stack = Just (Stack {focus = 'k',
+up = "", down = "\232"})}, screen = 3, screenDetail = 2},Screen {workspace =
+Workspace {tag = 5, layout = 0, stack = Just (Stack {focus = ':', up = "", down
+= ""})}, screen = 4, screenDetail = 0},Screen {workspace = Workspace {tag = 6,
+layout = 0, stack = Just (Stack {focus = '=', up = "", down = "\GS\167"})},
+screen = 0, screenDetail = 0}], hidden = [Workspace {tag = 1, layout = 0, stack
+= Just (Stack {focus = '\r', up = "", down = ""})},Workspace {tag = 2, layout =
+0, stack = Just (Stack {focus = '+', up = "iP", down = ""})},Workspace {tag = 7,
+layout = 0, stack = Just (Stack {focus = 'M', up = "", down =
+"q\255"})},Workspace {tag = 8, layout = 0, stack = Just (Stack {focus = '\179',
+up = "J\196", down = ""})}], floating = fromList []}
+
+
+
+insert is reversible               : ^C*** Failed! Exception: 'user interrupt' (after 12 tests):
+'\245'
+StackSet {current = Screen {workspace = Workspace {tag = 3, layout = -3, stack =
+Just (Stack {focus = '#', up = "\175", down = "\CAN\173\DC2\166^1"})}, screen =
+2, screenDetail = 12}, visible = [Screen {workspace = Workspace {tag = 1, layout
+= -3, stack = Nothing}, screen = 1, screenDetail = -1},Screen {workspace =
+Workspace {tag = 4, layout = -3, stack = Just (Stack {focus = 'c', up = "\245",
+down = "\185"})}, screen = 3, screenDetail = 5},Screen {workspace = Workspace
+{tag = 5, layout = -3, stack = Just (Stack {focus = '\176', up = "\167\&6", down
+= "8\165=\ETX"})}, screen = 4, screenDetail = 11},Screen {workspace = Workspace
+{tag = 6, layout = -3, stack = Just (Stack {focus = 'W', up = "", down =
+"\250\SUBa\147\194\SYNh\STXN"})}, screen = 0, screenDetail = -2}], hidden =
+[Workspace {tag = 2, layout = -3, stack = Just (Stack {focus = '\220', up =
+"\148", down = "5\f"})},Workspace {tag = 7, layout = -3, stack = Just (Stack
+{focus = 'e', up = "M", down = ""})}], floating = fromList []}
+
+
+
+
+
+
+delete/focus                       : ^C*** Failed! Exception: 'user interrupt' (after 1 test):
+'#'
+StackSet {current = Screen {workspace = Workspace {tag = 3, layout = -1, stack =
+Nothing}, screen = 2, screenDetail = -1}, visible = [Screen {workspace =
+Workspace {tag = 1, layout = -1, stack = Nothing}, screen = 0, screenDetail =
+0},Screen {workspace = Workspace {tag = 2, layout = -1, stack = Nothing}, screen
+= 1, screenDetail = 1},Screen {workspace = Workspace {tag = 4, layout = -1,
+stack = Nothing}, screen = 3, screenDetail = -1}], hidden = [], floating =
+fromList []}
+
+
+
+
+
+ensure works                       : (501 tests)
+ ^C*** Failed! Exception: 'user interrupt' (after 502 tests):
+StackSet {current = Screen {workspace = Workspace {tag = 4, layout = 1, stack = Nothing}, screen = 0, screenDetail = -1}, visible = [Screen {workspace = Workspace {tag = 1, layout = 1, stack = Just (Stack {focus = 'F', up = "", down = ""})}, screen = 1, screenDetail = 0},Screen {workspace = Workspace {tag = 3, layout = 1, stack = Just (Stack {focus = 's', up = "", down = ""})}, screen = 2, screenDetail = -1}], hidden = [Workspace {tag = 2, layout = 1, stack = Just (Stack {focus = '\n', up = "", down = ""})},Workspace {tag = 5, layout = 1, stack = Nothing}], floating = fromList []}
+-1
+[1]
+
+
+
+
+insert is reversible               : *** Failed! Falsifiable (after 8 tests and 1 shrink):  
+'a'
+StackSet {current = Screen {workspace = Workspace {tag = 1, layout = 3, stack = Just (Stack {focus = '1', up = "C\204T<R", down = ""})}, screen = 0, screenDetail = 4}, visible = [], hidden = [], floating = fromList []}
+
