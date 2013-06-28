@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-} -- We have orphaned instances by design!
 module Instances where
 
 import Test.QuickCheck
@@ -7,9 +8,10 @@ import Utils
 
 import XMonad.StackSet
 import Control.Monad
-import Data.List (nub, genericLength)
 
-import Debug.Trace
+import Data.List (nub)
+
+--import Debug.Trace
 
 --
 -- The all important Arbitrary instance for StackSet.
@@ -25,37 +27,43 @@ instance (Integral i, Integral s, Eq a, Arbitrary a, Arbitrary l, Arbitrary sd)
       wsIdxInFocus <- choose (1, numWs) -- pick index of WS to be in focus
 
       -- The same screen id's will be present in the list, with high possibility.
-      screens  <- replicateM numScreens arbitrary
+      scrs  <- replicateM numScreens arbitrary
 
       -- Generate a list of "windows" for each workspace.
       wsWindows  <- vector numWs :: Gen [[a]]
 
       -- Pick a random window "number" in each workspace, to give focus.
-      focus <- sequence [ if null windows
+      wsFocus <- sequence [ if null windows
                           then return Nothing
                           else liftM Just $ choose (0, length windows - 1)
                         | windows <- wsWindows ]
 
-      let tags = [1 .. fromIntegral numWs]
-          focusWsWindows = zip focus wsWindows
-          wss = zip tags focusWsWindows -- tmp representation of a workspace (tag, windows)
-          initSs = new lay tags screens
+      let wsTags = [1 .. fromIntegral numWs]
+          wsFocusWindows = zip wsFocus wsWindows
+          -- Windows to populate into the StackSet at workspace=tag and with a
+          -- focused window for each ws [tag, [(focus, windows)]]
+          wsTFW = zip wsTags wsFocusWindows
+          -- Initial StackSet to be populated
+          initSs = new lay wsTags scrs
       return $
         view (fromIntegral wsIdxInFocus) $
-        foldr (\(tag, (focus, windows)) ss -> -- Fold through all generated (tags,windows).
+        foldr (\(tg, (fcs, wds)) ss -> -- Fold through all generated (tags, [(focus, windows)]).
                 -- set workspace active by tag and fold through all
                 -- windows while inserting them.  Apply the given number
                 -- of `focusUp` on the resulting StackSet.
-                applyN focus focusUp $ foldr insertUp (view tag ss) windows
-              ) initSs wss
+                applyN fcs focusUp $ foldr insertUp (view tg ss) wds
+              ) initSs wsTFW
 
 
 --
 -- Just generate StackSets with Char elements.
 --
 type Tag = Int
+type Layout = Int
 type Window = Char
-type T = StackSet Tag Int Window Int Int
+type SrcId = Int
+type SrcDetail = Int
+type T = StackSet Tag Layout Window SrcId SrcDetail
 
 
 
@@ -127,6 +135,7 @@ arbitraryTag x = do
 -- We can do the reverse with a simple `suchThat`:
 --
 --   n <- arbitrary `suchThat` \n' -> not $ n `member` x
+--
 arbitraryWindow :: NonEmptyWindowsStackSet -> Gen Window
 arbitraryWindow (NonEmptyWindowsStackSet x) = do
   let ws = allWindows x

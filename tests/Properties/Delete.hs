@@ -11,16 +11,16 @@ import XMonad.StackSet hiding (filter)
 -- 'delete'
 
 -- deleting the current item removes it.
+prop_delete :: T -> Bool
 prop_delete x =
     case peek x of
         Nothing -> True
         Just i  -> not (member i (delete i x))
-    where _ = x :: T
 
 -- delete is reversible with 'insert'.
 -- It is the identiy, except for the 'master', which is reset on insert and delete.
---
-prop_delete_insert (x :: T) =
+prop_delete_insert :: T -> Bool
+prop_delete_insert x =
     case peek x of
         Nothing -> True
         Just n  -> insertUp n (delete n y) == y
@@ -28,12 +28,15 @@ prop_delete_insert (x :: T) =
         y = swapMaster x
 
 -- delete should be local
-prop_delete_local (x :: T) =
+
+prop_delete_local :: T -> Bool
+prop_delete_local x =
     case peek x of
         Nothing -> True
         Just i  -> hidden_spaces x == hidden_spaces (delete i x)
 
 -- delete should not affect focus unless the focused element is what is being deleted
+prop_delete_focus :: Gen Bool
 prop_delete_focus = do
   -- There should be at least two windows. One in focus, and some to try and
   -- delete (doesn't have to be windows on the current workspace).  We generate
@@ -48,6 +51,7 @@ prop_delete_focus = do
 -- focus movement in the presence of delete:
 -- when the last window in the stack set is focused, focus moves `up'.
 -- usual case is that it moves 'down'.
+prop_delete_focus_end :: Gen Bool
 prop_delete_focus_end = do
     -- Generate a StackSet with at least two windows on the current workspace.
     x <- arbitrary `suchThat` \(x' :: T) -> length (index x') >= 2
@@ -58,6 +62,7 @@ prop_delete_focus_end = do
 
 -- focus movement in the presence of delete:
 -- when not in the last item in the stack, focus moves down
+prop_delete_focus_not_end :: Gen Bool
 prop_delete_focus_not_end = do
   x <- arbitrary
        -- There must be at least two windows and the current focused is not the

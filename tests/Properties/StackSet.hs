@@ -34,7 +34,9 @@ import Data.List (nub)
 --          -- monotonically ascending in the elements
 -- * the current workspace should be a member of the xinerama screens
 --
-invariant (s :: T) = and
+invariant :: T -> Bool
+invariant s =
+  and
     -- no duplicates
     [ noDuplicates
 
@@ -57,57 +59,80 @@ invariant (s :: T) = and
 
 --  inBounds  = and [ w >=0 && w < size s | (w,sc) <- M.assocs (screens s) ]
 
+monotonic :: (Eq a, Num a) => [a] -> Bool
 monotonic []       = True
-monotonic (x:[])   = True
+monotonic (_:[])   = True
 monotonic (x:y:zs) | x == y-1  = monotonic (y:zs)
                    | otherwise = False
 
+
+-- Any StackSet should obay the invariant.
+prop_invariant :: T -> Bool
 prop_invariant = invariant
 
 -- and check other ops preserve invariants
-prop_empty_I  (SizedPositive n) l = forAll (choose (1, fromIntegral n)) $  \m ->
-                                      forAll (vector m) $ \ms ->
-        invariant $ new l [0..fromIntegral n-1] ms
+prop_empty_I :: SizedPositive -> Int -> Property
+prop_empty_I  (SizedPositive n) l =
+  forAll (choose (1, fromIntegral n)) $  \m ->
+    forAll (vector m) $ \ms ->
+      invariant $ new l [0..fromIntegral n-1] ms
 
-prop_view_I n (x :: T) =
+prop_view_I :: Tag -> T -> Bool
+prop_view_I n x =
     invariant $ view n x
 
-prop_greedyView_I n (x :: T) =
+
+prop_greedyView_I :: Tag -> T -> Bool
+prop_greedyView_I n x =
     invariant $ greedyView n x
 
-prop_focusUp_I (SizedPositive n) (x :: T) =
+prop_focusUp_I :: SizedPositive -> T -> Bool
+prop_focusUp_I (SizedPositive n) x =
     invariant $ applyN (Just n) focusUp x
-prop_focusMaster_I (SizedPositive n) (x :: T) =
+
+prop_focusMaster_I :: SizedPositive -> T -> Bool
+prop_focusMaster_I (SizedPositive n) x =
     invariant $ applyN (Just n) focusMaster x
-prop_focusDown_I (SizedPositive n) (x :: T) =
+
+prop_focusDown_I :: SizedPositive -> T -> Bool
+prop_focusDown_I (SizedPositive n) x =
     invariant $ applyN (Just n) focusDown x
 
-prop_focus_I (SizedPositive n) (x :: T) =
+prop_focus_I :: SizedPositive -> T -> Bool
+prop_focus_I (SizedPositive n) x =
     case peek x of
         Nothing -> True
         Just _  -> let w = focus . fromJust . stack . workspace . current $
                            applyN (Just n) focusUp x
                    in invariant $ focusWindow w x
 
-prop_insertUp_I n (x :: T) = invariant $ insertUp n x
+prop_insertUp_I :: Window -> T -> Bool
+prop_insertUp_I n x = invariant $ insertUp n x
 
-prop_delete_I (x :: T) = invariant $
+prop_delete_I :: T -> Bool
+prop_delete_I x = invariant $
     case peek x of
         Nothing -> x
         Just i  -> delete i x
 
-prop_swap_master_I (x :: T) = invariant $ swapMaster x
+prop_swap_master_I :: T -> Bool
+prop_swap_master_I x = invariant $ swapMaster x
 
-prop_swap_left_I  (SizedPositive n) (x :: T) =
+prop_swap_left_I :: SizedPositive -> T -> Bool
+prop_swap_left_I  (SizedPositive n) x =
     invariant $ applyN (Just n) swapUp x
-prop_swap_right_I (SizedPositive n) (x :: T) =
+
+prop_swap_right_I :: SizedPositive -> T -> Bool
+prop_swap_right_I (SizedPositive n) x =
     invariant $ applyN (Just n) swapDown x
 
-prop_shift_I (x :: T) = do
+prop_shift_I :: T -> Gen Bool
+prop_shift_I x = do
   n <- arbitraryTag x
   return $ invariant $ shift (fromIntegral n) x
 
-prop_shift_win_I (nex :: NonEmptyWindowsStackSet) = do
+prop_shift_win_I :: NonEmptyWindowsStackSet -> Gen Bool
+prop_shift_win_I nex = do
   let NonEmptyWindowsStackSet x = nex
   w <- arbitraryWindow nex
   n <- arbitraryTag x
@@ -118,18 +143,22 @@ prop_shift_win_I (nex :: NonEmptyWindowsStackSet) = do
 
 
 -- empty StackSets have no windows in them
+prop_empty :: EmptyStackSet -> Bool
 prop_empty (EmptyStackSet x) =
         all (== Nothing) [ stack w | w <- workspace (current x)
                                         : map workspace (visible x) ++ hidden x ]
 
 -- empty StackSets always have focus on first workspace
+prop_empty_current :: EmptyStackSet -> Bool
 prop_empty_current (EmptyStackSet x) = currentTag x == head (tags x)
 
 -- no windows will be a member of an empty workspace
+prop_member_empty :: Window -> EmptyStackSet -> Bool
 prop_member_empty i (EmptyStackSet x) = member i x == False
 
 -- peek either yields nothing on the Empty workspace, or Just a valid window
-prop_member_peek (x :: T) =
+prop_member_peek :: T -> Bool
+prop_member_peek x =
     case peek x of
         Nothing -> True {- then we don't know anything -}
         Just i  -> member i x

@@ -1,20 +1,31 @@
-module Utils where
+module Utils (
+
+    hidden_spaces,
+    normal,
+    noOverlaps,
+    applyN,
+    tags
+
+  ) where
 
 import XMonad.StackSet hiding (filter)
 import Graphics.X11.Xlib.Types (Rectangle(..))
 import Data.List (sortBy)
 
 -- Useful operation, the non-local workspaces
+hidden_spaces :: StackSet i l a sid sd -> [Workspace i l a]
 hidden_spaces x = map workspace (visible x) ++ hidden x
 
 
 -- normalise workspace list
+normal :: Ord i => StackSet i l a sid sd -> StackSet i l a sid sd
 normal s = s { hidden = sortBy g (hidden s), visible = sortBy f (visible s) }
     where
         f = \a b -> tag (workspace a) `compare` tag (workspace b)
         g = \a b -> tag a `compare` tag b
 
 
+noOverlaps :: [Rectangle] -> Bool
 noOverlaps []  = True
 noOverlaps [_] = True
 noOverlaps xs  = and [ verts a `notOverlap` verts b
@@ -31,9 +42,11 @@ noOverlaps xs  = and [ verts a `notOverlap` verts b
 
 
 applyN :: (Integral n) => Maybe n -> (a -> a) -> a -> a
-applyN Nothing f v = v
-applyN (Just 0) f v = v
+applyN Nothing _ v = v
+applyN (Just 0) _ v = v
 applyN (Just n) f v = applyN (Just $ n-1) f (f v)
 
 
+
+tags :: StackSet i l a sid sd -> [i]
 tags x = map tag $ workspaces x

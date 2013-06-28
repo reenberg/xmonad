@@ -3,9 +3,9 @@ module Properties where
 import Test.QuickCheck
 
 -- Our QC instances and properties.
-import Instances
+import Instances() -- Only import instances
 import Properties.Delete
-import Properties.Failure
+--import Properties.Failure
 import Properties.Floating
 import Properties.Focus
 import Properties.GreedyView
@@ -17,8 +17,10 @@ import Properties.StackSet
 import Properties.Swap
 import Properties.View
 import Properties.Workspace
-import Properties.Layout.Full
-import Properties.Layout.Tall
+--import Properties.Layout.Full
+--import Properties.Layout.Tall
+
+-- TODO: Add the commented modules to the tests below.
 
 import System.Environment
 import Text.Printf
@@ -26,15 +28,25 @@ import Text.Printf
 
 main :: IO ()
 main = do
+  printf "Running tests...\n"
   arg <- getArgs
-  let n = if null arg then 1000 else read $ head arg
-  --let n = if null arg then 3 else read $ head arg
+  let n = if length arg == 1 &&
+             (head arg == "--run-tests")
+          then
+            1000
+          else if  length arg == 2 &&
+                   (head arg == "--run-tests")
+               then
+                 read $ arg!!1
+               else
+                 error "Only one argument is allowed. This should be a number!"
       args = stdArgs { maxSuccess = n, maxSize = 100 }
       qc   = quickCheckWithResult args
       perform (s, t) = printf "%-35s: " s >> qc t
   mapM_ perform tests
 
 
+tests :: [(String, Property)]
 tests =
   [("StackSet invariants", property prop_invariant)
   ,("empty: invariant",    property prop_empty_I)
@@ -146,5 +158,3 @@ tests =
   ,("mapWorkspace id",      property prop_mapWorkspaceId)
   ,("mapWorkspace inverse", property prop_mapWorkspaceInverse)
   ]
-
-

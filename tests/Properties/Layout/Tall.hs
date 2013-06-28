@@ -19,15 +19,19 @@ import Data.Ratio
 -- The Tall layout
 
 -- 1 window should always be tiled fullscreen
+prop_tile_fullscreen :: Rectangle -> Bool
 prop_tile_fullscreen rect = tile pct rect 1 1 == [rect]
     where pct = 1/2
 
 -- multiple windows
+
+prop_tile_non_overlap :: Rectangle -> Int -> Int -> Bool
 prop_tile_non_overlap rect windows nmaster = noOverlaps (tile pct rect nmaster windows)
   where _ = rect :: Rectangle
         pct = 3 % 100
 
 -- splitting horizontally yields sensible results
+prop_split_hoziontal :: NonNegative Int -> Rectangle -> Bool
 prop_split_hoziontal (NonNegative n) x =
         sum (map rect_width xs) == rect_width x
      &&
@@ -39,8 +43,8 @@ prop_split_hoziontal (NonNegative n) x =
         xs = splitHorizontally n x
 
 -- splitting horizontally yields sensible results
-prop_splitVertically (r :: Rational) x =
-
+prop_splitVertically :: Rational -> Rectangle -> Bool
+prop_splitVertically r x =
         rect_x x == rect_x a && rect_x x == rect_x b
       &&
         rect_width x == rect_width a && rect_width x == rect_width b
@@ -49,22 +53,24 @@ prop_splitVertically (r :: Rational) x =
 
 
 -- pureLayout works.
+prop_purelayout_tall :: Int -> Rational -> Rational -> Rectangle -> Gen Bool
 prop_purelayout_tall n r1 r2 rect = do
   x <- (arbitrary :: Gen T) `suchThat` (isJust . peek)
-  let layout = Tall n r1 r2
+  let lay = Tall n r1 r2
       st = fromJust . stack . workspace . current $ x
-      ts = pureLayout layout rect st
+      ts = pureLayout lay rect st
   return $
         length ts == length (index x)
       &&
         noOverlaps (map snd ts)
       &&
-        description layout == "Tall"
+        description lay == "Tall"
 
 
 -- Test message handling of Tall
 
 -- what happens when we send a Shrink message to Tall
+prop_shrink_tall :: NonNegative Int -> NonZero (NonNegative Rational) -> NonNegative Rational -> Bool
 prop_shrink_tall (NonNegative n) (NonZero (NonNegative delta)) (NonNegative frac) =
         n == n' && delta == delta' -- these state components are unchanged
     && frac' <= frac  && (if frac' < frac then frac' == 0 || frac' == frac - delta
@@ -72,11 +78,13 @@ prop_shrink_tall (NonNegative n) (NonZero (NonNegative delta)) (NonNegative frac
         -- remaining fraction should shrink
     where
          l1                   = Tall n delta frac
-         Just l2@(Tall n' delta' frac') = l1 `pureMessage` (SomeMessage Shrink)
+         Just (Tall n' delta' frac') = l1 `pureMessage` (SomeMessage Shrink)
         --  pureMessage :: layout a -> SomeMessage -> Maybe (layout a)
 
 
 -- what happens when we send a Shrink message to Tall
+prop_expand_tall :: NonNegative Int -> NonZero (NonNegative Rational)
+                 -> NonNegative Integer -> NonZero (NonNegative Integer) -> Bool
 prop_expand_tall (NonNegative n)
                  (NonZero (NonNegative delta))
                  (NonNegative n1)
@@ -93,16 +101,18 @@ prop_expand_tall (NonNegative n)
     where
          frac                 = min 1 (n1 % d1)
          l1                   = Tall n delta frac
-         Just l2@(Tall n' delta' frac') = l1 `pureMessage` (SomeMessage Expand)
+         Just (Tall n' delta' frac') = l1 `pureMessage` (SomeMessage Expand)
         --  pureMessage :: layout a -> SomeMessage -> Maybe (layout a)
 
 -- what happens when we send an IncMaster message to Tall
+prop_incmaster_tall :: NonNegative Int -> NonZero (NonNegative Rational)
+                    -> NonNegative Rational -> NonNegative Int -> Bool
 prop_incmaster_tall (NonNegative n) (NonZero (NonNegative delta)) (NonNegative frac)
                     (NonNegative k) =
        delta == delta'  && frac == frac' && n' == n + k
     where
          l1                   = Tall n delta frac
-         Just l2@(Tall n' delta' frac') = l1 `pureMessage` (SomeMessage (IncMasterN k))
+         Just (Tall n' delta' frac') = l1 `pureMessage` (SomeMessage (IncMasterN k))
         --  pureMessage :: layout a -> SomeMessage -> Maybe (layout a)
 
 
@@ -112,5 +122,6 @@ prop_incmaster_tall (NonNegative n) (NonZero (NonNegative delta)) (NonNegative f
      --   toMessage GT = SomeMessage (IncMasterN 1)
 
 
+prop_desc_mirror :: Int -> Rational -> Rational -> Bool
 prop_desc_mirror n r1 r2 = description (Mirror $! t) == "Mirror Tall"
     where t = Tall n r1 r2

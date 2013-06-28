@@ -36,6 +36,7 @@ source-repository head
   type:     darcs
   location: http://code.haskell.org/xmonad
 
+-- defaults to true!
 flag small_base
     description: Choose the new smaller, split-up base package.
 
@@ -84,7 +85,7 @@ executable xmonad
                         XMonad.Operations
                         XMonad.StackSet
 
-    if true 
+    if true
         ghc-options:    -funbox-strict-fields -Wall
 
     if impl(ghc >= 6.12.1)
@@ -96,7 +97,7 @@ executable xmonad
     if flag(testing)
         cpp-options:    -DTESTING
         hs-source-dirs: . tests/
-        build-depends:  QuickCheck < 2
+        build-depends:  QuickCheck == 2.*
         ghc-options:    -Werror
     if flag(testing) && flag(small_base)
         build-depends:  filepath, process, directory, mtl, unix, X11, base, containers, random, extensible-exceptions

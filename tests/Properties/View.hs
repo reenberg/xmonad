@@ -13,17 +13,19 @@ import Data.List (sortBy)
 -- viewing workspaces
 
 -- view sets the current workspace to 'n'
-prop_view_current (x :: T) = do
+prop_view_current :: T -> Gen Bool
+prop_view_current x = do
     n <- arbitraryTag x
     return $ (tag . workspace . current . view n) x == n
 
 -- view *only* sets the current workspace, and touches Xinerama.
 -- no workspace contents will be changed.
-prop_view_local  (x :: T) = do
+prop_view_local :: T -> Gen Bool
+prop_view_local x = do
     n <- arbitraryTag x
-    return $ workspaces x == workspaces (view n x)
+    return $ sortedWs x == sortedWs (view n x)
   where
-    workspaces a = sortBy (\s t -> tag s `compare` tag t) $
+    sortedWs a = sortBy (\s t -> tag s `compare` tag t) $
                                     workspace (current a)
                                     : map workspace (visible a) ++ hidden a
 
@@ -35,12 +37,14 @@ prop_view_local  (x :: T) = do
 --     i = fromIntegral n
 
 -- view is idempotent
-prop_view_idem (x :: T) = do
+prop_view_idem :: T -> Gen Bool
+prop_view_idem x = do
     n <- arbitraryTag x
     return $ view n (view n x) == (view n x)
 
 -- view is reversible, though shuffles the order of hidden/visible
-prop_view_reversible (x :: T) = do
+prop_view_reversible :: T -> Gen Bool
+prop_view_reversible x = do
     n <- arbitraryTag x
     return $ normal (view n' (view n x)) == normal x
   where

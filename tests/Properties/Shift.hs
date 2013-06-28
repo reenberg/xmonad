@@ -13,8 +13,9 @@ import qualified Data.List as L
 -- shift
 
 -- shift is fully reversible on current window, when focus and master
--- are the same. otherwise, master may move.
-prop_shift_reversible (x :: T) = do
+-- are the same. otherwise, master may move
+prop_shift_reversible :: T -> Gen Bool
+prop_shift_reversible x = do
     i <- arbitraryTag x
     case peek y of
       Nothing -> return True
@@ -27,11 +28,18 @@ prop_shift_reversible (x :: T) = do
 -- shiftMaster
 
 -- focus/local/idempotent same as swapMaster:
-prop_shift_master_focus (x :: T) = peek x == (peek $ shiftMaster x)
-prop_shift_master_local (x :: T) = hidden_spaces x == hidden_spaces (shiftMaster x)
-prop_shift_master_idempotent (x :: T) = shiftMaster (shiftMaster x) == shiftMaster x
+prop_shift_master_focus :: T -> Bool
+prop_shift_master_focus x = peek x == (peek $ shiftMaster x)
+
+prop_shift_master_local :: T -> Bool
+prop_shift_master_local x = hidden_spaces x == hidden_spaces (shiftMaster x)
+
+prop_shift_master_idempotent :: T -> Bool
+prop_shift_master_idempotent x = shiftMaster (shiftMaster x) == shiftMaster x
+
 -- ordering is constant modulo the focused window:
-prop_shift_master_ordering (x :: T) = case peek x of
+prop_shift_master_ordering :: T -> Bool
+prop_shift_master_ordering x = case peek x of
     Nothing -> True
     Just m  -> L.delete m (index x) == L.delete m (index $ shiftMaster x)
 
@@ -39,20 +47,25 @@ prop_shift_master_ordering (x :: T) = case peek x of
 -- shiftWin
 
 -- shiftWin on current window is the same as shift
-prop_shift_win_focus (x :: T) = do
+prop_shift_win_focus :: T -> Gen Bool
+prop_shift_win_focus x = do
     n <- arbitraryTag x
     case peek x of
       Nothing -> return True
       Just w  -> return $ shiftWin n w x == shift n x
 
 -- shiftWin on a non-existant window is identity
-prop_shift_win_indentity (x :: T) = do
+prop_shift_win_indentity :: T -> Gen Bool
+prop_shift_win_indentity x = do
     n <- arbitraryTag x
     w <- arbitrary `suchThat` \w' -> not (w' `member` x)
     return $ shiftWin n w x == x
 
 -- shiftWin leaves the current screen as it is, if neither n is the tag
 -- of the current workspace nor w on the current workspace
+--
+-- Note: suchThat seems the only way in this case!
+prop_shift_win_fix_current :: Gen Bool
 prop_shift_win_fix_current = do
   x <- arbitrary `suchThat` \(x' :: T) ->
          -- Invariant, otherWindows are NOT in the current workspace.
@@ -67,4 +80,3 @@ prop_shift_win_fix_current = do
   idx <- choose(0, length(otherWindows) - 1)
   let w = otherWindows !! idx
   return $ (current $ x) == (current $ shiftWin n w x)
-

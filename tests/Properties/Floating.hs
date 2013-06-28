@@ -11,14 +11,16 @@ import qualified Data.Map as M
 ------------------------------------------------------------------------
 -- properties for the floating layer:
 
-prop_float_reversible (nex :: NonEmptyWindowsStackSet) = do
+prop_float_reversible :: NonEmptyWindowsStackSet -> Gen Bool
+prop_float_reversible nex = do
   let NonEmptyWindowsStackSet x = nex
   w <- arbitraryWindow nex
   return $ sink w (float w geom x) == x
         where
             geom = RationalRect 100 100 100 100
 
-prop_float_geometry (nex :: NonEmptyWindowsStackSet) = do
+prop_float_geometry :: NonEmptyWindowsStackSet -> Gen Bool
+prop_float_geometry nex = do
     let NonEmptyWindowsStackSet x = nex
     w <- arbitraryWindow nex
     let s = float w geom x
@@ -26,7 +28,8 @@ prop_float_geometry (nex :: NonEmptyWindowsStackSet) = do
   where
     geom = RationalRect 100 100 100 100
 
-prop_float_delete (nex :: NonEmptyWindowsStackSet) = do
+prop_float_delete :: NonEmptyWindowsStackSet -> Gen Bool
+prop_float_delete nex = do
     let NonEmptyWindowsStackSet x = nex
     w <- arbitraryWindow nex
     let s = float w geom x
